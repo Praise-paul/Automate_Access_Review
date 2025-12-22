@@ -1,0 +1,19 @@
+{
+  "name": "access_review_scripts",
+  "version": "1.0.0",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^17.2.3",
+    "readline-sync": "^1.4.10"
+  }
+}
