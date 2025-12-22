@@ -13,10 +13,9 @@ async function getToken() {
   return r.data.access_token;
 }
 
-export default async function crowdstrikeUsers() {
+export default async function crowdstrikeUsers(debug = false) {
   const token = await getToken();
 
-  // Step 1: get user UUIDs
   const idsRes = await axios.get(
     `${BASE}/user-management/queries/users/v1`,
     {
@@ -32,7 +31,6 @@ export default async function crowdstrikeUsers() {
     return new Set();
   }
 
-  // Step 2: resolve user details
   const detailsRes = await axios.post(
     `${BASE}/user-management/entities/users/GET/v1`,
     { ids: idsRes.data.resources },
@@ -44,24 +42,22 @@ export default async function crowdstrikeUsers() {
     }
   );
 
-  // Normalize emails
   const users = new Set();
 
-for (const u of detailsRes.data.resources || []) {
-  const uid = u.uid?.toLowerCase();
+  for (const u of detailsRes.data.resources || []) {
+    const email = u.email || u.login || u.uid;
 
-  if (!uid) continue;
+    if (!email || !email.includes("@")) continue;
+    if (email.startsWith("sys_")) continue;
+    if (u.first_name === "Falcon") continue;
+    if (u.status !== "active") continue;
 
-  // --- SKIP SYSTEM / SERVICE USERS ---
-  if (uid.startsWith("sys_")) continue;
-  if (!uid.includes("@")) continue;
-  if (u.first_name === "Falcon") continue;
-
-  if (u.status === "active") {
-    users.add(uid);
+    users.add(email.toLowerCase());
   }
-}
 
+  if (debug) {
+    console.log("[CROWDSTRIKE] Users returned:", [...users]);
+  }
 
   return users;
 }

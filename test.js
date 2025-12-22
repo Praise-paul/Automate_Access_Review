@@ -1,49 +1,14 @@
 import axios from "axios";
-import "dotenv/config";
 
-const BASE = process.env.CS_BASE_URL;
-
-const token = (
-  await axios.post(
-    `${BASE}/oauth2/token`,
-    new URLSearchParams({
-      client_id: process.env.CS_CLIENT_ID,
-      client_secret: process.env.CS_CLIENT_SECRET
-    })
-  )
-).data.access_token;
-
-const users = await axios.get(
-  `${BASE}/user-management/queries/users/v1`,
+const r = await axios.get(
+  "https://slack.com/api/admin.users.list",
   {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json"
-    },
+    headers: { Authorization: `Bearer ${process.env.SLACK_TOKEN}` },
     params: {
-      limit: 500
+      enterprise_id: process.env.SLACK_ENTERPRISE_ID,
+      limit: 1
     }
   }
 );
 
-console.log(users.data);
-
-
-
-const details = await axios.post(
-  `${BASE}/user-management/entities/users/GET/v1`,
-  {
-    ids: users.data.resources
-  },
-  {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    }
-  }
-);
-
-console.log(details.data.resources);
-
-
-console.log(details.data);
+console.log(r.data);

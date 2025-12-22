@@ -39,28 +39,33 @@ for (const app of Object.keys(App)) {
   }
 
   const selected = selectGroups(app, matches);
+  console.log("\n==============================");
+console.log(`APPLICATION: ${app.toUpperCase()}`);
+console.log("==============================");
+console.log("Selected JumpCloud groups:");
+selected.forEach(g => console.log(` - ${g.name} (${g.id})`));
+
   if (!selected.length) {
     console.log("No groups selected, skipping.");
     continue;
   }
 
-  // ===== EXPECTED USERS =====
-  const expected = new Set();
-  for (const g of selected) {
-    const members = await groupMembers(g.id);
-    members.forEach(u => expected.add(u));
-  }
+  // inside the App loop in main.js
+const expected = new Set();
+for (const g of selected) {
+  const members = await groupMembers(g.id, true);
+  members.forEach(u => expected.add(u.toLowerCase().trim())); // Normalize expected
+}
 
-  // ===== ACTUAL USERS =====
-const actualRaw = await FETCHERS[app]();
-
-// normalize regardless of whether it's a Set or Array
+const actualRaw = await FETCHERS[app](true);
 const actual = new Set(
   [...actualRaw]
     .filter(Boolean)
-    .map(e => e.toLowerCase().trim())
+    .map(e => e.toLowerCase().trim()) // Normalize actual
 );
 
+console.log("EXPECTED SAMPLE:", [...expected].slice(0, 5));
+console.log("ACTUAL SAMPLE:", [...actual].slice(0, 5));
 
   // ===== COMPARISON =====
   const unauthorized = [...actual].filter(u => !expected.has(u));

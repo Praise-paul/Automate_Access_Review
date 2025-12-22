@@ -1,108 +1,104 @@
 import axios from "axios";
 
-const jc = axios.create({
-  baseURL: "https://console.jumpcloud.com/api/v2",
-  headers: {
-    "x-api-key": process.env.JUMPCLOUD_API_KEY,
-    "Accept": "application/json"
-  },
-  timeout: 30000
-});
+// Constants for base URLs
+const BASE_V1 = "https://console.jumpcloud.com/api";
+const BASE_V2 = "https://console.jumpcloud.com/api/v2";
 
-async function resolveUserEmails(userIds) {
-  if (userIds.length === 0) return new Map();
+const HEADERS = {
+  "x-api-key": process.env.JUMPCLOUD_API_KEY,
+  "x-org-id": process.env.JUMPCLOUD_ORG_ID,
+  "Content-Type": "application/json",
+  "Accept": "application/json"
+};
 
-  const res = await axios.post(
-    "https://console.jumpcloud.com/api/search/users", // ✅ NO /v2
-    {
-      filter: { _id: { $in: userIds } },
-      limit: userIds.length
-    },
-    {
-      headers: {
-        "x-api-key": process.env.JUMPCLOUD_API_KEY,
-        "Accept": "application/json",
-        "Content-Type": "application/json"
-      }
-    }
-  );
-
-  const map = new Map();
-  for (const u of res.data || []) {
-    if (u.email && !u.system) {
-      map.set(u._id, u.email.toLowerCase());
-    }
-  }
-
-  return map;
-}
-
-
+/**
+ * Fetches all groups using pagination to overcome the default 10-item limit.
+ */
 export async function listGroups() {
-  const all = [];
+  const allGroups = [];
   const limit = 100;
   let skip = 0;
 
   while (true) {
-    const r = await jc.get("/usergroups", { params: { limit, skip } });
+    // Headers must be passed here to avoid 401 errors
+    const r = await axios.get(`${BASE_V2}/usergroups`, { 
+      headers: HEADERS,
+      params: { limit, skip } 
+    });
+
     if (!Array.isArray(r.data) || r.data.length === 0) break;
 
-    all.push(...r.data);
+    allGroups.push(...r.data);
     skip += r.data.length;
+
+    // Stop if we received fewer results than the limit (end of list)
+    if (r.data.length < limit) break;
   }
 
-  return all;
+  return allGroups;
 }
 
-
-export async function groupMembers(groupId) {
+/**
+ * Fetches members and resolves their IDs to email addresses.
+ */
+export async function groupMembers(groupId, debug = false) {
   const userIds = [];
-  const limit = 100;
   let skip = 0;
+  const limit = 100;
 
-  // 1️⃣ Get user IDs from group
+  // 1. Get Member IDs using the v2 associations endpoint
   while (true) {
-    const r = await jc.get(`/usergroups/${groupId}/members`, {
+    const r = await axios.get(`${BASE_V2}/usergroups/${groupId}/members`, {
+      headers: HEADERS,
       params: { limit, skip }
     });
 
-    if (!Array.isArray(r.data) || r.data.length === 0) break;
-
+    if (!r.data?.length) break;
+    
     r.data.forEach(m => {
-      if (m.type === "user" && m.id) {
-        userIds.push(m.id);
-      }
-    });
+  const t = m.to?.type;
+  const id = m.to?.id;
 
+  if ((t === "user" || t === "systemuser") && id) {
+    userIds.push(id);
+  }
+});
+
+    
     skip += r.data.length;
+    if (r.data.length < limit) break;
   }
 
-  if (userIds.length === 0) return new Set();
+  if (debug) console.log(`[JUMPCLOUD] Found ${userIds.length} IDs for group ${groupId}`);
+  if (!userIds.length) return new Set();
 
-  // 2️⃣ Resolve IDs → emails (SEARCH API, NOT v2)
-  const res = await axios.post(
-    "https://console.jumpcloud.com/api/search/users",
-    {
-      filter: { _id: { $in: userIds } },
-      limit: userIds.length
-    },
-    {
-      headers: {
-        "x-api-key": process.env.JUMPCLOUD_API_KEY,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      }
-    }
-  );
+  // 2. Resolve IDs → Emails using direct user lookup (always supported)
+const emails = new Set();
 
-  // 3️⃣ Build expected email set
-  const emails = new Set();
-  for (const u of res.data || []) {
-    if (u.email && !u.system) {
-      emails.add(u.email.toLowerCase());
-    }
+for (const id of userIds) {
+  try {
+    const r = await axios.get(
+      `${BASE_V1}/systemusers/${id}`,
+      { headers: HEADERS }
+    );
+
+    const u = r.data;
+    const email = (u.email || u.username || "").toLowerCase().trim();
+console.log("[JUMPCLOUD] Resolved systemuser:", {
+  id,
+  email: r.data.email,
+  username: r.data.username,
+  state: r.data.state
+});
+
+
+    if (!email || u.system) continue;
+
+    emails.add(email);
+  } catch (err) {
+    console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
   }
-
-  return emails;
 }
 
+return emails;
+}
