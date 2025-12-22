@@ -21,9 +21,9 @@ export async function listGroups() {
 
   while (true) {
     // Headers must be passed here to avoid 401 errors
-    const r = await axios.get(`${BASE_V2}/usergroups`, { 
+    const r = await axios.get(`${BASE_V2}/usergroups`, {
       headers: HEADERS,
-      params: { limit, skip } 
+      params: { limit, skip }
     });
 
     if (!Array.isArray(r.data) || r.data.length === 0) break;
@@ -54,17 +54,17 @@ export async function groupMembers(groupId, debug = false) {
     });
 
     if (!r.data?.length) break;
-    
+
     r.data.forEach(m => {
-  const t = m.to?.type;
-  const id = m.to?.id;
+      const t = m.to?.type;
+      const id = m.to?.id;
 
-  if ((t === "user" || t === "systemuser") && id) {
-    userIds.push(id);
-  }
-});
+      if ((t === "user" || t === "systemuser") && id) {
+        userIds.push(id);
+      }
+    });
 
-    
+
     skip += r.data.length;
     if (r.data.length < limit) break;
   }
@@ -73,32 +73,32 @@ export async function groupMembers(groupId, debug = false) {
   if (!userIds.length) return new Set();
 
   // 2. Resolve IDs → Emails using direct user lookup (always supported)
-const emails = new Set();
+  const emails = new Set();
 
-for (const id of userIds) {
-  try {
-    const r = await axios.get(
-      `${BASE_V1}/systemusers/${id}`,
-      { headers: HEADERS }
-    );
+  for (const id of userIds) {
+    try {
+      const r = await axios.get(
+        `${BASE_V1}/systemusers/${id}`,
+        { headers: HEADERS }
+      );
 
-    const u = r.data;
-    const email = (u.email || u.username || "").toLowerCase().trim();
-console.log("[JUMPCLOUD] Resolved systemuser:", {
-  id,
-  email: r.data.email,
-  username: r.data.username,
-  state: r.data.state
-});
+      const u = r.data;
+      const email = (u.email || u.username || "").toLowerCase().trim();
+      console.log("[JUMPCLOUD] Resolved systemuser:", {
+        id,
+        email: r.data.email,
+        username: r.data.username,
+        state: r.data.state
+      });
 
 
-    if (!email || u.system) continue;
+      if (!email || u.system) continue;
 
-    emails.add(email);
-  } catch (err) {
-    console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
+      emails.add(email);
+    } catch (err) {
+      console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
+    }
   }
-}
 
-return emails;
+  return emails;
 }

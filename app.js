@@ -5,5 +5,9 @@ export default {
 
   crowdstrike: {
     keywords: ["crowdstrike", "falcon"]
+  },
+
+  oci: {
+    autoGroupPrefix: "OracleOCI-"
   }
 };
