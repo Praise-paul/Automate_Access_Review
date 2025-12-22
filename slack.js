@@ -24,22 +24,31 @@ export default async function slackUsers() {
       break;
     }
 
-    for (const m of r.data.members || []) {
-      // Best available privileged signal
-      if (!m.is_owner && !m.is_primary_owner) continue;
-      if (m.deleted || m.is_bot) continue;
+   // Inside slackUsers() loop...
+for (const m of r.data.members || []) {
+  if (m.deleted || m.is_bot) continue;
 
-      const email = m.profile?.email?.toLowerCase().trim();
-      if (!email) continue;
+  // 1. Identify Org-level Admins/Owners
+  // In Enterprise Grid, the source of truth for the Org Dashboard is here:
+  const isOrgOwner = m.enterprise_user?.is_owner === true;
+  const isOrgAdmin = m.enterprise_user?.is_admin === true;
+  const isPrimaryOwner = m.is_primary_owner === true;
 
-      if (
-        email.startsWith("sys_") ||
-        email.includes("integration") ||
-        email.includes("falcon")
-      ) continue;
+  // ONLY include if they are an Org Owner, Org Admin, or Primary Owner
+  if (!isOrgOwner && !isOrgAdmin && !isPrimaryOwner) continue;
 
-      users.add(email);
-    }
+  const email = m.profile?.email?.toLowerCase().trim();
+  if (!email) continue;
+
+  // 2. Filter out system integrations
+  if (
+    email.startsWith("sys_") ||
+    email.includes("integration") ||
+    email.includes("falcon")
+  ) continue;
+
+  users.add(email);
+}
 
     cursor = r.data.response_metadata?.next_cursor || null;
   } while (cursor);

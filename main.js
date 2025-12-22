@@ -50,26 +50,23 @@ selected.forEach(g => console.log(` - ${g.name} (${g.id})`));
     continue;
   }
 
-  // inside the App loop in main.js
+// Inside your main.js loop
 const expected = new Set();
 for (const g of selected) {
-  const members = await groupMembers(g.id, true);
-  members.forEach(u => expected.add(u.toLowerCase().trim())); // Normalize expected
+  const members = await groupMembers(g.id, true); 
+  // Ensure 'members' is an array of email strings
+  members.forEach(email => {
+    if (email) expected.add(email.toLowerCase().trim());
+  });
 }
 
-const actualRaw = await FETCHERS[app](true);
-const actual = new Set(
-  [...actualRaw]
-    .filter(Boolean)
-    .map(e => e.toLowerCase().trim()) // Normalize actual
-);
+// FETCHERS['slack'] calls your slackUsers function
+const actualRaw = await FETCHERS[app](); 
+const actual = new Set([...actualRaw].map(e => e.toLowerCase().trim()));
 
-console.log("EXPECTED SAMPLE:", [...expected].slice(0, 5));
-console.log("ACTUAL SAMPLE:", [...actual].slice(0, 5));
-
-  // ===== COMPARISON =====
-  const unauthorized = [...actual].filter(u => !expected.has(u));
-  const missing = [...expected].filter(u => !actual.has(u));
+// The "Comparison" you asked for:
+const unauthorized = [...actual].filter(u => !expected.has(u));
+const missing = [...expected].filter(u => !actual.has(u));
 
   // ===== OUTPUT =====
   console.log("\n--- ACCESS REVIEW RESULTS ---");
