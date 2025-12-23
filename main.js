@@ -34,13 +34,12 @@ for (const app of Object.keys(App)) {
   let matches;
 
   if (app === "oci") {
-    // 🔥 Auto-detect all OCI SCIM groups
+    // Detect all OCI SCIM groups
     matches = jcGroups.filter(g =>
       typeof g.name === "string" &&
       g.name.startsWith(App.oci.autoGroupPrefix)
     );
   } else {
-    // Existing keyword-based logic
     matches = jcGroups.filter(g => {
       const text = ((g.name || "") + " " + (g.description || "")).toLowerCase();
       return Array.isArray(cfg.keywords) &&
@@ -118,12 +117,9 @@ for (const app of Object.keys(App)) {
       }
     }
 
-    continue; // ⛔ skip generic logic for OCI
+    continue;
   }
-  // =========================================================
 
-
-  // Inside your main.js loop
   const expected = new Set();
   for (const g of selected) {
     const members = await groupMembers(g.id, true);
@@ -133,34 +129,34 @@ for (const app of Object.keys(App)) {
     });
   }
 
-  // FETCHERS['slack'] calls your slackUsers function
+  // FETCHERS['slack'] calls slackUsers function
   const actualRaw = await FETCHERS[app]({
     groups: selected
   });
   const actual = new Set([...actualRaw].map(e => e.toLowerCase().trim()));
 
-  // The "Comparison" you asked for:
   const unauthorized = [...actual].filter(u => !expected.has(u));
   const missing = [...expected].filter(u => !actual.has(u));
+
 
   // ===== OUTPUT =====
   console.log("\n--- ACCESS REVIEW RESULTS ---");
 
   if (unauthorized.length === 0) {
-    console.log("✅ No unauthorized users");
+    console.log("No unauthorized users");
   } else {
-    console.log("❌ UNAUTHORIZED USERS:");
+    console.log("UNAUTHORIZED USERS:");
     unauthorized.forEach(u => console.log(" -", u));
   }
 
   if (missing.length === 0) {
-    console.log("✅ No missing users");
+    console.log("No missing users");
   } else {
-    console.log("⚠️ MISSING USERS:");
+    console.log("MISSING USERS:");
     missing.forEach(u => console.log(" -", u));
   }
 
-  // ===== CSV EXPORT =====
+  // ===== CSV EXPORT (if there is a mismatch)=====
   if (unauthorized.length) {
     await writeCSV(
       `${app}_unauthorized.csv`,

@@ -12,11 +12,11 @@ const HEADERS = {
 };
 
 /**
- * Fetches all groups using pagination to overcome the default 10-item limit.
+ * Fetches all groups using pagination.
  */
 export async function listGroups() {
   const allGroups = [];
-  const limit = 100;
+  const limit = 1000;
   let skip = 0;
 
   while (true) {

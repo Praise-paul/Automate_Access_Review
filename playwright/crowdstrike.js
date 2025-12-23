@@ -3,7 +3,6 @@ export const crowdstrikeAdapter = {
   baseUrl: "https://falcon.us-2.crowdstrike.com",
   userDataDir: "playwright/profiles/crowdstrike",
 
-  // MUST remain false for Falcon
   headless: true,
 
   usersTableSelector: 'tr[data-test-selector="table-row"]',
@@ -19,8 +18,6 @@ export const crowdstrikeAdapter = {
       "[CROWDSTRIKE] Waiting for Falcon shell (any dashboard)"
     );
 
-    // ✅ DO NOT wait for a specific URL
-    // ✅ Wait for global Falcon UI instead
     await page.waitForSelector(
       '[data-test-selector="falcon-top-bar"]',
       { timeout: 120_000 }

@@ -9,11 +9,11 @@ export default async function slackUsers() {
       "https://slack.com/api/users.list",
       {
         headers: {
-          Authorization: `Bearer ${process.env.SLACK_TOKEN}` // xoxb-
+          Authorization: `Bearer ${process.env.SLACK_TOKEN}`
         },
         params: {
           limit: 200,
-          team_id: process.env.SLACK_ENTERPRISE_ID, // 🔑 REQUIRED for org-installed apps
+          team_id: process.env.SLACK_ENTERPRISE_ID, 
           ...(cursor ? { cursor } : {})
         }
       }
