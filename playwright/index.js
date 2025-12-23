@@ -29,7 +29,13 @@ export async function captureUserListEvidence(app, adapter) {
 
         await gotoUsers(page);
 
-        console.log(`[${app.toUpperCase()}] Taking screenshot`);
+
+if (app !== "oci") {
+  await page.waitForSelector(selector, { timeout: 120_000 });
+}
+
+console.log(`[${app.toUpperCase()}] Taking screenshot`);
+
 
         const dir = path.join("evidence", app);
         fs.mkdirSync(dir, { recursive: true });

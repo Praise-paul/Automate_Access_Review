@@ -1,0 +1,6 @@
+2025/12/23-15:57:59.041 297c Reusing MANIFEST C:\Users\praise.paul\OneDrive\Documents\Access_Review_Scripts\.oci-profile\Default\IndexedDB\https_cloud.oracle.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/12/23-15:57:59.042 297c Recovering log #3
+2025/12/23-15:57:59.057 297c Reusing old log C:\Users\praise.paul\OneDrive\Documents\Access_Review_Scripts\.oci-profile\Default\IndexedDB\https_cloud.oracle.com_0.indexeddb.leveldb/000003.log 
+2025/12/23-15:58:00.455 297c Level-0 table #5: started
+2025/12/23-15:58:00.488 297c Level-0 table #5: 1112666 bytes OK
+2025/12/23-15:58:00.490 297c Delete type=0 #3

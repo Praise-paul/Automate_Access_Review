@@ -13,6 +13,7 @@ import writeCSV from "./report.js";
 import { captureUserListEvidence } from "./playwright/index.js";
 import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
 import { slackAdapter } from "./playwright/slack.js";
+import { ociAdapter } from "./playwright/oci.js";
 
 const FETCHERS = {
   slack: slackUsers,
@@ -96,24 +97,16 @@ for (const app of Object.keys(App)) {
 
     for (const g of selected) {
       const expectedRaw = await groupMembers(g.id);
-      const expected = new Set(
-        [...expectedRaw].map(u => u.toLowerCase().trim())
-      );
+      const expected = new Set([...expectedRaw].map(u => u.toLowerCase().trim()));
 
       const actualRaw = await FETCHERS.oci({ groups: [g] });
-      const actual = new Set(
-        [...actualRaw].map(u => u.toLowerCase().trim())
-      );
+      const actual = new Set([...actualRaw].map(u => u.toLowerCase().trim()));
 
       const unauthorized = [...actual].filter(u => !expected.has(u));
       const missing = [...expected].filter(u => !actual.has(u));
 
       if (unauthorized.length || missing.length) {
-        ociResults.push({
-          group: g.name,
-          unauthorized,
-          missing
-        });
+        ociResults.push({ group: g.name, unauthorized, missing });
       }
     }
 
@@ -137,8 +130,13 @@ for (const app of Object.keys(App)) {
       }
     }
 
+    // ✅ ADD THIS HERE (before continue)
+    console.log("\n[OCI] Capturing UI evidence...");
+    await captureUserListEvidence("oci", ociAdapter);
+
     continue;
   }
+
 
   const expected = new Set();
   for (const g of selected) {
@@ -196,6 +194,11 @@ for (const app of Object.keys(App)) {
   if (app === "slack") {
     console.log("\n[SLACK] Capturing UI evidence...");
     await captureUserListEvidence("slack", slackAdapter);
+  }
+
+  if (app === "oci") {
+    console.log("\n[OCI] Capturing UI evidence...");
+    await captureUserListEvidence("oci", ociAdapter);
   }
 }
 
