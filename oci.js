@@ -19,7 +19,7 @@ export default async function ociUsers({ groups }, debug = false) {
         process.env.OCI_FINGERPRINT,
         privateKey,
         null,
-        null // ⛔ no region
+        null 
     );
 
     const client = new identity.IdentityClient({

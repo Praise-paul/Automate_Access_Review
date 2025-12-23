@@ -51,14 +51,12 @@ for (const app of Object.keys(App)) {
 
   /* ----- GROUP DISCOVERY ----- */
   if (app === "oci") {
-    // OCI: auto-detect all OracleOCI-* groups
     matches = jcGroups.filter(
       g =>
         typeof g.name === "string" &&
         g.name.startsWith(App.oci.autoGroupPrefix)
     );
   } else {
-    // Slack / CrowdStrike: keyword-based detection
     matches = jcGroups.filter(g => {
       const text = ((g.name || "") + " " + (g.description || "")).toLowerCase();
       return Array.isArray(cfg.keywords) &&
@@ -75,10 +73,9 @@ for (const app of Object.keys(App)) {
   let selected;
 
   if (app === "oci") {
-    // ✅ OCI: auto-select ALL matching groups
+
     selected = matches;
   } else {
-    // ✅ Slack / CrowdStrike: user selects groups
     selected = selectGroups(app, matches);
   }
 
@@ -93,10 +90,6 @@ for (const app of Object.keys(App)) {
     console.log("No groups selected, skipping.");
     continue;
   }
-
-  /* ============================
-     OCI ACCESS REVIEW (SPECIAL)
-  ============================ */
 
   if (app === "oci") {
     const ociResults = [];
@@ -146,10 +139,6 @@ for (const app of Object.keys(App)) {
 
     continue;
   }
-
-  /* ============================
-     SLACK / CROWDSTRIKE REVIEW
-  ============================ */
 
   const expected = new Set();
   for (const g of selected) {

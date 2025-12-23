@@ -2,7 +2,6 @@ export const crowdstrikeAdapter = {
     userDataDir: "playwright/profiles/crowdstrike",
     headless: false,
 
-    // ✅ ADD THIS
     selector: '[data-test-selector="users-table"]',
 
     async login(page) {

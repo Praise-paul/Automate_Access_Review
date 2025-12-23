@@ -2,7 +2,6 @@ export const slackAdapter = {
     userDataDir: "playwright/profiles/slack",
     headless: false,
 
-    // ✅ THIS WAS MISSING
     selector: '[data-qa="org_members_table"]',
 
     async login(page) {

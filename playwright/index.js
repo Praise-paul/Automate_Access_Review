@@ -25,21 +25,15 @@ export async function captureUserListEvidence(app, adapter) {
     const page = context.pages()[0] || await context.newPage();
 
     try {
-        // 1️⃣ Login
         await login(page);
 
-        // 2️⃣ Navigate + apply filters
         await gotoUsers(page);
 
-        // ⛔ DO NOT wait for the table (Slack never stabilizes)
-        // Just make sure selector exists ONCE
         console.log(`[${app.toUpperCase()}] Taking screenshot`);
 
-        // Prepare output directory
         const dir = path.join("evidence", app);
         fs.mkdirSync(dir, { recursive: true });
 
-        // Define file path FIRST
         const file = path.join(
             dir,
             `users-${new Date().toISOString().replace(/[:.]/g, "-")}.png`
@@ -47,7 +41,6 @@ export async function captureUserListEvidence(app, adapter) {
 
         console.log(`[${app.toUpperCase()}] Taking screenshot`);
 
-        // Take screenshot (no selector waits, no fullPage)
         await Promise.race([
             page.screenshot({
                 path: file,
