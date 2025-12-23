@@ -16,7 +16,7 @@ const HEADERS = {
  */
 export async function listGroups() {
   const allGroups = [];
-  const limit = 1000;
+  const limit = 100;
   let skip = 0;
 
   while (true) {

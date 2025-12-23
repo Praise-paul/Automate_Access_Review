@@ -2,20 +2,27 @@ import "dotenv/config";
 
 import App from "./app.js";
 import { listGroups, groupMembers } from "./jumpcloud.js";
-import { selectGroups } from "./groupSelector.js";
+import { confirmApp, selectGroups } from "./groupSelector.js";
+
 import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
+
 import writeCSV from "./report.js";
+
 import { captureUserListEvidence } from "./playwright/index.js";
 import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
-
+import { slackAdapter } from "./playwright/slack.js";
 
 const FETCHERS = {
   slack: slackUsers,
   crowdstrike: crowdstrikeUsers,
   oci: ociUsers
 };
+
+/* ============================
+   LOAD ALL JUMPCLOUD GROUPS
+============================ */
 
 const jcGroups = await listGroups();
 
@@ -25,21 +32,33 @@ jcGroups.forEach(g => {
 });
 console.log("================================");
 
+/* ============================
+   MAIN APP LOOP
+============================ */
 
 for (const app of Object.keys(App)) {
   console.log(`\n=== ${app.toUpperCase()} ===`);
 
-  const cfg = App[app];
+  /* ----- APP-LEVEL CONFIRMATION ----- */
+  const proceed = await confirmApp(app);
+  if (!proceed) {
+    console.log(`Skipping ${app.toUpperCase()}`);
+    continue;
+  }
 
+  const cfg = App[app];
   let matches;
 
+  /* ----- GROUP DISCOVERY ----- */
   if (app === "oci") {
-    // Detect all OCI SCIM groups
-    matches = jcGroups.filter(g =>
-      typeof g.name === "string" &&
-      g.name.startsWith(App.oci.autoGroupPrefix)
+    // OCI: auto-detect all OracleOCI-* groups
+    matches = jcGroups.filter(
+      g =>
+        typeof g.name === "string" &&
+        g.name.startsWith(App.oci.autoGroupPrefix)
     );
   } else {
+    // Slack / CrowdStrike: keyword-based detection
     matches = jcGroups.filter(g => {
       const text = ((g.name || "") + " " + (g.description || "")).toLowerCase();
       return Array.isArray(cfg.keywords) &&
@@ -47,28 +66,27 @@ for (const app of Object.keys(App)) {
     });
   }
 
-
   if (!matches.length) {
     console.log("No matching JumpCloud groups, skipping.");
     continue;
   }
 
+  /* ----- GROUP SELECTION ----- */
   let selected;
 
   if (app === "oci") {
-    selected = matches.filter(g =>
-      g.name.startsWith(App.oci.autoGroupPrefix)
-    );
+    // ✅ OCI: auto-select ALL matching groups
+    selected = matches;
   } else {
+    // ✅ Slack / CrowdStrike: user selects groups
     selected = selectGroups(app, matches);
   }
-
-  const ociResults = [];
 
   console.log("\n==============================");
   console.log(`APPLICATION: ${app.toUpperCase()}`);
   console.log("==============================");
   console.log("Selected JumpCloud groups:");
+
   selected.forEach(g => console.log(` - ${g.name} (${g.id})`));
 
   if (!selected.length) {
@@ -76,13 +94,23 @@ for (const app of Object.keys(App)) {
     continue;
   }
 
-  // ================= OCI AUTO GROUP REVIEW =================
+  /* ============================
+     OCI ACCESS REVIEW (SPECIAL)
+  ============================ */
+
   if (app === "oci") {
     const ociResults = [];
 
     for (const g of selected) {
-      const expected = await groupMembers(g.id);
-      const actual = await FETCHERS.oci({ groups: [g] });
+      const expectedRaw = await groupMembers(g.id);
+      const expected = new Set(
+        [...expectedRaw].map(u => u.toLowerCase().trim())
+      );
+
+      const actualRaw = await FETCHERS.oci({ groups: [g] });
+      const actual = new Set(
+        [...actualRaw].map(u => u.toLowerCase().trim())
+      );
 
       const unauthorized = [...actual].filter(u => !expected.has(u));
       const missing = [...expected].filter(u => !actual.has(u));
@@ -96,7 +124,6 @@ for (const app of Object.keys(App)) {
       }
     }
 
-    // ===== OCI SUMMARY OUTPUT =====
     console.log("\n--- OCI ACCESS REVIEW SUMMARY ---");
 
     if (!ociResults.length) {
@@ -120,43 +147,43 @@ for (const app of Object.keys(App)) {
     continue;
   }
 
+  /* ============================
+     SLACK / CROWDSTRIKE REVIEW
+  ============================ */
+
   const expected = new Set();
   for (const g of selected) {
     const members = await groupMembers(g.id, true);
-    // Ensure 'members' is an array of email strings
     members.forEach(email => {
       if (email) expected.add(email.toLowerCase().trim());
     });
   }
 
-  // FETCHERS['slack'] calls slackUsers function
-  const actualRaw = await FETCHERS[app]({
-    groups: selected
-  });
-  const actual = new Set([...actualRaw].map(e => e.toLowerCase().trim()));
+  const actualRaw = await FETCHERS[app]({ groups: selected });
+  const actual = new Set(
+    [...actualRaw].map(e => e.toLowerCase().trim())
+  );
 
   const unauthorized = [...actual].filter(u => !expected.has(u));
   const missing = [...expected].filter(u => !actual.has(u));
 
-
-  // ===== OUTPUT =====
   console.log("\n--- ACCESS REVIEW RESULTS ---");
 
-  if (unauthorized.length === 0) {
+  if (!unauthorized.length) {
     console.log("No unauthorized users");
   } else {
     console.log("UNAUTHORIZED USERS:");
     unauthorized.forEach(u => console.log(" -", u));
   }
 
-  if (missing.length === 0) {
+  if (!missing.length) {
     console.log("No missing users");
   } else {
     console.log("MISSING USERS:");
     missing.forEach(u => console.log(" -", u));
   }
 
-  // ===== CSV EXPORT (if there is a mismatch)=====
+  /* ----- CSV EXPORT ----- */
   if (unauthorized.length) {
     await writeCSV(
       `${app}_unauthorized.csv`,
@@ -170,12 +197,17 @@ for (const app of Object.keys(App)) {
       missing.map(u => ({ email: u }))
     );
   }
-if (app === "crowdstrike") {
-  console.log("\n[CROWDSTRIKE] Capturing UI evidence...");
-  await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
-}
 
+  /* ----- UI EVIDENCE ----- */
+  if (app === "crowdstrike") {
+    console.log("\n[CROWDSTRIKE] Capturing UI evidence...");
+    await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
+  }
 
+  if (app === "slack") {
+    console.log("\n[SLACK] Capturing UI evidence...");
+    await captureUserListEvidence("slack", slackAdapter);
+  }
 }
 
 console.log("\n✔ Access review completed");

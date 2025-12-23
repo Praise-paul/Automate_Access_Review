@@ -10,5 +10,17 @@ export function selectGroups(app, groups) {
 
   if (!input) return [];
 
-  return input.split(",").map(i => groups[Number(i)]);
+  return input
+    .split(",")
+    .map(i => Number(i.trim()))
+    .filter(i => !isNaN(i) && groups[i])
+    .map(i => groups[i]);
+}
+
+export function confirmApp(appName) {
+  const answer = readline.question(
+    `\nProceed with ${appName.toUpperCase()} access review? (y/N): `
+  );
+
+  return answer.trim().toLowerCase() === "y";
 }

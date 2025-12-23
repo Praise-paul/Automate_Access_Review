@@ -1,39 +1,67 @@
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
-import { autoScroll } from "./utils.js";
 
 export async function captureUserListEvidence(app, adapter) {
-  const userDataDir = adapter.userDataDir;
-
-  const context = await chromium.launchPersistentContext(
+  const {
     userDataDir,
-    {
-      headless: adapter.headless ?? true,
-      viewport: { width: 1280, height: 900 }
-    }
-  );
+    login,
+    gotoUsers,
+    selector,
+    headless = false
+  } = adapter;
 
-  const page = await context.newPage();
+  if (!selector) {
+    throw new Error(`[${app.toUpperCase()}] Adapter is missing 'selector'`);
+  }
 
-  await adapter.login(page);
-  await adapter.gotoUsers(page);
+  console.log(`[${app.toUpperCase()}] Opening browser (persistent profile)`);
 
-  await page.waitForSelector(adapter.usersTableSelector, {
-    timeout: 60_000
+  const context = await chromium.launchPersistentContext(userDataDir, {
+    headless,
+    viewport: { width: 1340, height: 1200 }
   });
 
-  await autoScroll(page);
+  const page = context.pages()[0] || await context.newPage();
 
-  const outDir = `evidence/${app}`;
-  fs.mkdirSync(outDir, { recursive: true });
+  try {
+    // 1️⃣ Login
+    await login(page);
 
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const outPath = path.join(outDir, `users-${ts}.png`);
+    // 2️⃣ Navigate + apply filters
+    await gotoUsers(page);
 
-  await page.screenshot({ path: outPath, fullPage: true });
+    // ⛔ DO NOT wait for the table (Slack never stabilizes)
+    // Just make sure selector exists ONCE
+console.log(`[${app.toUpperCase()}] Taking screenshot`);
 
-  console.log(`[${app}] Evidence saved → ${outPath}`);
+    // Prepare output directory
+const dir = path.join("evidence", app);
+fs.mkdirSync(dir, { recursive: true });
 
-  await context.close();
+// Define file path FIRST
+const file = path.join(
+  dir,
+  `users-${new Date().toISOString().replace(/[:.]/g, "-")}.png`
+);
+
+console.log(`[${app.toUpperCase()}] Taking screenshot`);
+
+// Take screenshot (no selector waits, no fullPage)
+await Promise.race([
+  page.screenshot({
+    path: file,
+    fullPage: false
+  }),
+  page.waitForTimeout(60_000).then(() => {
+    throw new Error("Screenshot timed out");
+  })
+]);
+
+console.log(`[${app}] Evidence saved → ${file}`);
+
+  } finally {
+    console.log(`[${app.toUpperCase()}] Closing browser`);
+    await context.close();
+  }
 }
