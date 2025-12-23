@@ -7,6 +7,9 @@ import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
 import writeCSV from "./report.js";
+import { captureUserListEvidence } from "./playwright/index.js";
+import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
+
 
 const FETCHERS = {
   slack: slackUsers,
@@ -171,6 +174,12 @@ for (const app of Object.keys(App)) {
       missing.map(u => ({ email: u }))
     );
   }
+if (app === "crowdstrike") {
+  console.log("\n[CROWDSTRIKE] Capturing UI evidence...");
+  await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
+}
+
+
 }
 
 console.log("\n✔ Access review completed");
