@@ -1,59 +1,57 @@
 export const ociAdapter = {
   userDataDir: "./.oci-profile",
   headless: false,
-
-  // Dummy selector so generic code doesn't break
-  selector: "body",
+  selector: "input[aria-label='Items per page']", // Direct target from your HTML
 
   async login(page) {
-    await page.goto(
-      "https://cloud.oracle.com/?tenant=neospaceai",
-      { waitUntil: "domcontentloaded" }
-    );
-
+    await page.goto("https://cloud.oracle.com/?tenant=neospaceai", { 
+      waitUntil: "domcontentloaded" 
+    });
     console.log("[OCI] Complete login + MFA if prompted");
-
-    // Wait until we are inside OCI console
-    await page.waitForURL(
-      url => url.href.startsWith("https://cloud.oracle.com"),
-      { timeout: 180_000 }
-    );
+    await page.waitForURL(url => url.href.includes("cloud.oracle.com"), { 
+      timeout: 180_000 
+    });
   },
 
   async gotoUsers(page) {
     console.log("[OCI] Opening Users page");
-
+    
+    // Use a high timeout and wait for load to be more stable
     await page.goto(
       "https://cloud.oracle.com/identity/domains/ocid1.domain.oc1..aaaaaaaa42jyl5v23n7zotvnxa3rja3fabgiuq5b4mbli2bscf7h2bbt5zuq/users?region=us-chicago-1",
-      { waitUntil: "domcontentloaded" }
+      { waitUntil: "load", timeout: 120_000 }
     );
 
-    // IMPORTANT: Wait for final redirected URL (post SSO)
-    await page.waitForURL(
-      url => url.href.includes("/identity/domains/"),
-      { timeout: 180_000 }
-    );
+    console.log("[OCI] Waiting for Identity Domain UI to initialize...");
 
-    console.log("[OCI] Users page reached, allowing UI to settle");
+    // 1. Wait for the pagination input specifically (found in your HTML snippet)
+    // The ID in your HTML was "_up6zkkymai9-input", which is dynamic, 
+    // so we use the aria-label instead.
+    const pageSizeInput = page.locator('input[aria-label="Items per page"]');
 
-    // 🔒 HARD SETTLE WINDOW (bounded, never hangs)
-    await page.waitForTimeout(10_000);
-
-    // Optional: try to increase page size, but NEVER wait on it
     try {
-      const itemsInput = page.locator('input[aria-label="Items per page"]');
-      if (await itemsInput.count()) {
-        await itemsInput.click();
-        await itemsInput.press("Control+A");
-        await itemsInput.type("100");
-        await itemsInput.press("Enter");
-        await page.keyboard.press("Tab");
-      }
-    } catch {
-      // Ignore — evidence does not depend on this
-    }
+      // OCI can take a long time to "pop" the internal fragment
+      await pageSizeInput.waitFor({ state: "visible", timeout: 90_000 });
+      console.log("[OCI] Pagination controls detected.");
 
-    // Final small settle before screenshot
-    await page.waitForTimeout(3_000);
+      // 2. Expand items per page
+      console.log("[OCI] Attempting to expand list to max items...");
+      await pageSizeInput.click({ force: true });
+      
+      // OCI dropdowns often appear at the bottom of the <body>
+      const options = page.locator("ul.oj-listbox-results li, .oj-listbox-results li");
+      await options.last().waitFor({ state: "visible", timeout: 15_000 });
+      
+      const count = await options.count();
+      console.log(`[OCI] Found ${count} options, selecting the largest...`);
+      await options.last().click();
+
+      // 3. Wait for the "Busy" overlay to disappear or a static delay for refresh
+      await page.waitForTimeout(8000); 
+      console.log("[OCI] List expanded successfully.");
+
+    } catch (err) {
+      console.warn("[OCI] UI did not fully load or expand. Proceeding with current view.");
+    }
   }
 };

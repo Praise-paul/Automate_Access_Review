@@ -3,20 +3,16 @@ import fs from "fs";
 import path from "path";
 
 export async function captureUserListEvidence(app, adapter) {
-    const {
-        userDataDir,
-        login,
-        gotoUsers,
-        selector,
-        headless = false
-    } = adapter;
+    const { userDataDir, login, gotoUsers, selector, headless = false } = adapter;
 
     if (!selector) {
         throw new Error(`[${app.toUpperCase()}] Adapter is missing 'selector'`);
     }
 
-    console.log(`[${app.toUpperCase()}] Opening browser (persistent profile)`);
+    const dir = path.join("evidence", app);
+    fs.mkdirSync(dir, { recursive: true });
 
+    console.log(`[${app.toUpperCase()}] Opening browser (persistent profile)`);
     const context = await chromium.launchPersistentContext(userDataDir, {
         headless,
         viewport: { width: 1340, height: 1200 }
@@ -26,38 +22,37 @@ export async function captureUserListEvidence(app, adapter) {
 
     try {
         await login(page);
-
         await gotoUsers(page);
 
+        // OCI Logic: Capture all pages via the pagination loop
+        if (app === "oci") {
+            let pageIndex = 1;
+            while (true) {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+                const file = path.join(dir, `users-page-${pageIndex}-${timestamp}.png`);
 
-if (app !== "oci") {
-  await page.waitForSelector(selector, { timeout: 120_000 });
-}
+                console.log(`[OCI] Capturing page ${pageIndex}`);
+                await page.screenshot({ path: file, fullPage: false });
 
-console.log(`[${app.toUpperCase()}] Taking screenshot`);
+                const nextBtn = page.locator('button[aria-label="Next"]:not([disabled])');
+                if (!(await nextBtn.count())) {
+                    console.log("[OCI] No more pages to capture.");
+                    break;
+                }
 
-
-        const dir = path.join("evidence", app);
-        fs.mkdirSync(dir, { recursive: true });
-
-        const file = path.join(
-            dir,
-            `users-${new Date().toISOString().replace(/[:.]/g, "-")}.png`
-        );
-
-        console.log(`[${app.toUpperCase()}] Taking screenshot`);
-
-        await Promise.race([
-            page.screenshot({
-                path: file,
-                fullPage: false
-            }),
-            page.waitForTimeout(60_000).then(() => {
-                throw new Error("Screenshot timed out");
-            })
-        ]);
-
-        console.log(`[${app}] Evidence saved → ${file}`);
+                await nextBtn.click();
+                await page.waitForTimeout(5000); // Wait for next set of rows
+                pageIndex++;
+            }
+        } 
+        // Non-OCI Logic: Standard single screenshot
+        else {
+            await page.waitForSelector(selector, { timeout: 60_000 });
+            const file = path.join(dir, `users-${new Date().toISOString().replace(/[:.]/g, "-")}.png`);
+            console.log(`[${app.toUpperCase()}] Taking screenshot`);
+            await page.screenshot({ path: file, fullPage: false });
+            console.log(`[${app}] Evidence saved → ${file}`);
+        }
 
     } finally {
         console.log(`[${app.toUpperCase()}] Closing browser`);
