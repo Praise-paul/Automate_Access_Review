@@ -2,7 +2,15 @@ export const slackAdapter = {
     userDataDir: "playwright/profiles/slack",
     headless: false,
 
-    selector: '[data-qa="org_members_table"]',
+    selector: [
+  '[data-qa="org_members_table"]',
+  '[data-qa="org_members_table_container"]',
+  '[data-qa="org_members_table_body"]',
+  '[data-qa="org_members_table_header"]',
+  // fallback: any visible table in the manage people view
+  'table',
+].join(","),
+
 
     async login(page) {
         console.log("[SLACK] Opening Slack People page");
