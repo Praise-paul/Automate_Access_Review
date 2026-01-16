@@ -1,58 +1,63 @@
 import axios from "axios";
 
+function isServiceAccountEmail(email) {
+  return (
+    email.startsWith("sys_") ||
+    email.includes("integration") ||
+    email.includes("falcon")
+  );
+}
+
 export default async function slackUsers() {
   const users = new Set();
   let cursor;
 
-  do {
-    const r = await axios.get(
-      "https://slack.com/api/users.list",
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.SLACK_TOKEN}`
-        },
-        params: {
-          limit: 200,
-          team_id: process.env.SLACK_ENTERPRISE_ID, 
-          ...(cursor ? { cursor } : {})
+  try {
+    do {
+      const r = await axios.get(
+        "https://slack.com/api/users.list",
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.SLACK_TOKEN}`
+          },
+          params: {
+            limit: 200,
+            team_id: process.env.SLACK_ENTERPRISE_ID,
+            ...(cursor ? { cursor } : {})
+          }
         }
+      );
+
+      if (!r.data.ok) {
+        console.warn("[SLACK] API error:", r.data.error);
+        break;
       }
-    );
 
-    if (!r.data.ok) {
-      console.warn("[SLACK] users.list error:", r.data.error);
-      break;
-    }
+      for (const m of r.data.members || []) {
+        if (m.deleted || m.is_bot) continue;
 
-    // Inside slackUsers() loop...
-    for (const m of r.data.members || []) {
-      if (m.deleted || m.is_bot) continue;
+        const isPrivileged =
+          m.enterprise_user?.is_owner ||
+          m.enterprise_user?.is_admin ||
+          m.is_primary_owner;
 
-      // 1. Identify Org-level Admins/Owners
-      // In Enterprise Grid, the source of truth for the Org Dashboard is here:
-      const isOrgOwner = m.enterprise_user?.is_owner === true;
-      const isOrgAdmin = m.enterprise_user?.is_admin === true;
-      const isPrimaryOwner = m.is_primary_owner === true;
+        if (!isPrivileged) continue;
 
-      // ONLY include if they are an Org Owner, Org Admin, or Primary Owner
-      if (!isOrgOwner && !isOrgAdmin && !isPrimaryOwner) continue;
+        const email = m.profile?.email?.toLowerCase().trim();
+        if (!email) continue;
 
-      const email = m.profile?.email?.toLowerCase().trim();
-      if (!email) continue;
+        // Explicit policy: exclude non-human service accounts
+        if (isServiceAccountEmail(email)) continue;
 
-      // 2. Filter out system integrations
-      if (
-        email.startsWith("sys_") ||
-        email.includes("integration") ||
-        email.includes("falcon")
-      ) continue;
+        users.add(email);
+      }
 
-      users.add(email);
-    }
+      cursor = r.data.response_metadata?.next_cursor || null;
 
-    cursor = r.data.response_metadata?.next_cursor || null;
-  } while (cursor);
+    } while (cursor);
+  } catch {
+    console.warn("[SLACK] Fetch failed, returning partial results");
+  }
 
-  console.log("[SLACK] Owners returned (best effort):", [...users]);
   return users;
 }

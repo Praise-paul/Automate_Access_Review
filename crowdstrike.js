@@ -14,6 +14,7 @@ async function getToken() {
 }
 
 export default async function crowdstrikeUsers(debug = false) {
+  try{
   const token = await getToken();
 
   const idsRes = await axios.get(
@@ -60,4 +61,8 @@ export default async function crowdstrikeUsers(debug = false) {
   }
 
   return users;
+}catch(err){
+  console.warn("[CROWDSTRIKE] API failure, returning empty set");
+    return new Set();;
+}
 }

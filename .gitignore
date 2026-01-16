@@ -4,3 +4,6 @@ package-lock.json
 playwright/profiles/
 /evidence/
 .oci-profile/
+*.csv
+*.png
+test.js

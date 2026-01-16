@@ -1,8 +1,8 @@
 export const slackAdapter = {
-    userDataDir: "playwright/profiles/slack",
-    headless: false,
+  userDataDir: "playwright/profiles/slack",
+  headless: false,
 
-    selector: [
+  selector: [
   '[data-qa="org_members_table"]',
   '[data-qa="org_members_table_container"]',
   '[data-qa="org_members_table_body"]',
@@ -11,43 +11,47 @@ export const slackAdapter = {
   'table',
 ].join(","),
 
+  async login(page) {
+    console.log("[SLACK] Opening People admin page");
 
-    async login(page) {
-        console.log("[SLACK] Opening Slack People page");
+    await page.goto(
+      "https://app.slack.com/manage/E08D7Q2A73R/people",
+      { waitUntil: "domcontentloaded" }
+    );
 
-        await page.goto(
-            "https://app.slack.com/manage/E08D7Q2A73R/people",
-            { waitUntil: "domcontentloaded" }
-        );
+    console.log("[SLACK] Login/MFA if prompted");
+  },
 
-        console.log(
-            "[SLACK] Complete JumpCloud / Slack login if prompted"
-        );
-    },
+  async gotoUsers(page) {
+    console.log("[SLACK] Waiting for admin UI");
 
-    async gotoUsers(page) {
-        console.log("[SLACK] Waiting for Slack to finish rehydration");
+    await page.waitForURL(
+      url =>
+        url.href.includes("/manage/") ||
+        url.href.includes("enterprise.slack.com"),
+      { timeout: 5 * 60_000 }
+    );
 
-        await page.waitForURL(
-            url =>
-                url.href.includes("/manage/") ||
-                url.href.includes("enterprise.slack.com"),
-            { timeout: 5 * 60_000 }
-        );
+    await page.waitForTimeout(8000);
 
-        await page.waitForTimeout(10_000);
+    const filterBtn =
+      '[data-qa="org_members_table_header-filter-button"]';
 
-        const adminFilter =
-            '[data-qa="org_members_table_header-filter-button"]';
+    await page.waitForSelector(filterBtn, { timeout: 180_000 });
+    await page.click(filterBtn);
+    await page.click('text=Org Admins & Owners');
 
-        await page.waitForSelector(adminFilter, {
-            timeout: 3 * 60_000
-        });
+    // Verify filter applied
+    await page.waitForFunction(() =>
+      document.body.innerText.includes("Org Admins")
+    );
 
-        console.log("[SLACK] Admin People UI detected");
+    console.log("[SLACK] Admin filter applied");
+  },
 
-        await page.click(adminFilter);
-        await page.click('text=Org Admins & Owners');
-        await page.waitForTimeout(1500);
-    }
+  async loggedInCheck(page) {
+    await page.waitForFunction(() =>
+      document.body.innerText.includes("People")
+    , { timeout: 30_000 });
+  }
 };

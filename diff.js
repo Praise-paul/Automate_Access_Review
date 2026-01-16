@@ -1,5 +1,9 @@
-function divergence(expected, actual) {
-  return [...actual].filter(u => !expected.has(u));
-}
+export function diffSets(expected, actual) {
+  const unauthorized = [...actual].filter(u => !expected.has(u));
+  const missing = [...expected].filter(u => !actual.has(u));
 
-export default divergence;
+  return {
+    unauthorized,
+    missing
+  };
+}

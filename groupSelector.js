@@ -24,3 +24,21 @@ export function confirmApp(appName) {
 
   return answer.trim().toLowerCase() === "y";
 }
+
+export function filterGroupsForApp(app, groups, config) {
+  if (app === "oci") {
+    return groups.filter(
+      g =>
+        typeof g.name === "string" &&
+        g.name.startsWith(config.oci.autoGroupPrefix)
+    );
+  }
+
+  const keywords = config[app]?.keywords || [];
+
+  return groups.filter(g => {
+    const text =
+      `${g.name || ""} ${g.description || ""}`.toLowerCase();
+    return keywords.some(k => text.includes(k));
+  });
+}

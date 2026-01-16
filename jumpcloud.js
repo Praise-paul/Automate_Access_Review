@@ -3,6 +3,7 @@ import axios from "axios";
 // Constants for base URLs
 const BASE_V1 = "https://console.jumpcloud.com/api";
 const BASE_V2 = "https://console.jumpcloud.com/api/v2";
+const USER_CACHE = new Map();
 
 const HEADERS = {
   "x-api-key": process.env.JUMPCLOUD_API_KEY,
@@ -74,31 +75,31 @@ export async function groupMembers(groupId, debug = false) {
 
   // 2. Resolve IDs → Emails using direct user lookup (always supported)
   const emails = new Set();
-
-  for (const id of userIds) {
-    try {
-      const r = await axios.get(
-        `${BASE_V1}/systemusers/${id}`,
-        { headers: HEADERS }
-      );
-
-      const u = r.data;
-      const email = (u.email || u.username || "").toLowerCase().trim();
-      console.log("[JUMPCLOUD] Resolved systemuser:", {
-        id,
-        email: r.data.email,
-        username: r.data.username,
-        state: r.data.state
-      });
-
-
-      if (!email || u.system) continue;
-
-      emails.add(email);
-    } catch (err) {
-      console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
-    }
+for (const id of userIds) {
+  if (USER_CACHE.has(id)) {
+    emails.add(USER_CACHE.get(id));
+    continue;
   }
+
+  try {
+    const r = await axios.get(
+      `${BASE_V1}/systemusers/${id}`,
+      { headers: HEADERS }
+    );
+
+    const u = r.data;
+    const email = (u.email || u.username || "").toLowerCase().trim();
+
+    if (!email || u.system) continue;
+
+    USER_CACHE.set(id, email);
+    emails.add(email);
+
+  } catch {
+    console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
+  }
+}
+
 
   return emails;
 }
