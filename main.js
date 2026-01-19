@@ -7,6 +7,8 @@ import { confirmApp, selectGroups, filterGroupsForApp } from "./groupSelector.js
 import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
+import { caniphishAdapter } from "./playwright/caniphish.js";
+
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
@@ -46,6 +48,9 @@ for (const app of Object.keys(App)) {
     console.log(`Skipping ${app.toUpperCase()}`);
     continue;
   }
+
+  const cfg = App[app];
+
 
   /* ----- FILTER GROUPS FOR THIS APP ----- */
   const relevantGroups = filterGroupsForApp(
@@ -152,8 +157,24 @@ for (const app of Object.keys(App)) {
     const members = await groupMembers(g.id);
     members.forEach(u => expected.add(u));
   }
+// 🔒 Evidence-only applications (no API comparison)
+if (cfg.evidenceOnly) {
+  console.log(`\n[${app.toUpperCase()}] Evidence-only application`);
+  console.log("Skipping API comparison, capturing UI evidence only");
 
-  const actual = await FETCHERS[app]({ groups: selectedGroups });
+  // Use the standard adapter routing
+  if (app === "caniphish") {
+    await captureUserListEvidence("caniphish", caniphishAdapter);
+  } else {
+    throw new Error(
+      `Evidence-only app '${app}' has no Playwright adapter defined`
+    );
+  }
+
+  continue;
+}
+
+const actual = await FETCHERS[app]({ groups: selectedGroups });
 
   const { unauthorized, missing } = diffSets(expected, actual);
 

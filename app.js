@@ -9,5 +9,10 @@ export default {
 
   oci: {
     autoGroupPrefix: "OracleOCI-"
+  },
+  caniphish: {
+    keywords: ["caniphish"],
+    evidenceOnly: true
+
   }
 };
