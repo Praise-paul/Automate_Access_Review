@@ -13,6 +13,9 @@ export default {
   caniphish: {
     keywords: ["caniphish"],
     evidenceOnly: true
-
-  }
+  },
+  csat: {
+  keywords: ["csat", "cis"],
+  evidenceOnly: true
+}
 };

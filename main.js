@@ -8,6 +8,7 @@ import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
 import { caniphishAdapter } from "./playwright/caniphish.js";
+import { csatAdapter } from "./playwright/csat.js";
 
 
 import writeCSV from "./report.js";
@@ -165,6 +166,8 @@ if (cfg.evidenceOnly) {
   // Use the standard adapter routing
   if (app === "caniphish") {
     await captureUserListEvidence("caniphish", caniphishAdapter);
+  } else if (app === "csat") {
+    await captureUserListEvidence("csat", csatAdapter);
   } else {
     throw new Error(
       `Evidence-only app '${app}' has no Playwright adapter defined`
