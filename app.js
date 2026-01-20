@@ -17,5 +17,9 @@ export default {
   csat: {
   keywords: ["csat", "cis"],
   evidenceOnly: true
+},
+cloudflare: {
+  keywords: ["cloudflare", "cf"]
 }
+
 };

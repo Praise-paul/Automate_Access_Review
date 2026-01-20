@@ -7,8 +7,8 @@ import { confirmApp, selectGroups, filterGroupsForApp } from "./groupSelector.js
 import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
-import { caniphishAdapter } from "./playwright/caniphish.js";
-import { csatAdapter } from "./playwright/csat.js";
+import cloudflareUsers from "./cloudflare.js";
+
 
 
 import writeCSV from "./report.js";
@@ -18,6 +18,9 @@ import { captureUserListEvidence } from "./playwright/index.js";
 import { ociAdapter } from "./playwright/oci.js";
 import { slackAdapter } from "./playwright/slack.js";
 import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
+import { caniphishAdapter } from "./playwright/caniphish.js";
+import { csatAdapter } from "./playwright/csat.js";
+import { cloudflareAdapter } from "./playwright/cloudflare.js";
 
 
 /* ============================
@@ -27,7 +30,8 @@ import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
 const FETCHERS = {
   slack: slackUsers,
   crowdstrike: crowdstrikeUsers,
-  oci: ociUsers
+  oci: ociUsers,
+  cloudflare: cloudflareUsers
 };
 
 /* ============================
@@ -206,6 +210,12 @@ const actual = await FETCHERS[app]({ groups: selectedGroups });
   if (app === "crowdstrike") {
     await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
   }
+
+  if (app === "cloudflare") {
+  console.log("\n[CLOUDFLARE] Capturing UI evidence...");
+  await captureUserListEvidence("cloudflare", cloudflareAdapter);
+}
+
 
 }
 
