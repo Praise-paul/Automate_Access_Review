@@ -1,4 +1,6 @@
-import "dotenv/config";
+import 'dotenv/config'; 
+import './playwright/crowdstrike.js';
+
 
 import App from "./app.js";
 import { listGroups, groupMembers } from "./jumpcloud.js";

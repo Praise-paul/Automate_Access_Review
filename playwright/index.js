@@ -33,20 +33,22 @@ async function _capture(app, adapter, groups) {
 
   try {
     /* ---------- LOGIN ---------- */
-    await adapter.login(page);
+// 1. Run the adapter's login logic (automated or just a console log)
+await adapter.login(page);
 
-    if (typeof adapter.loggedInCheck === "function") {
+if (typeof adapter.loggedInCheck === "function") {
   try {
-    // Fast path: already logged in
+    // 2. See if we are already logged in (immediately)
     await adapter.loggedInCheck(page);
+    console.log(`[${app.toUpperCase()}] Login confirmed.`);
   } catch {
-    console.log(
-      `[${app.toUpperCase()}] Waiting for manual login/MFA (polling for readiness)...`
-    );
+    // 3. FALLBACK: If not logged in, keep your existing manual polling logic
+    // This protects your other apps! 
+    console.log(`[${app.toUpperCase()}] Waiting for manual login/MFA...`);
 
     const start = Date.now();
-    const MAX_WAIT = 5 * 60_000; // 5 minutes
-    const POLL_INTERVAL = 10_000; // 10 seconds
+    const MAX_WAIT = 5 * 60_000; 
+    const POLL_INTERVAL = 10_000; 
 
     while (Date.now() - start < MAX_WAIT) {
       try {

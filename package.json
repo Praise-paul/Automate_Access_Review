@@ -16,6 +16,7 @@
     "dotenv": "^17.2.3",
     "oci-common": "^2.122.2",
     "oci-identity": "^2.122.2",
+    "otplib": "^13.1.1",
     "playwright": "^1.57.0",
     "readline-sync": "^1.4.10"
   }
