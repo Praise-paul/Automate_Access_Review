@@ -1,5 +1,6 @@
 import 'dotenv/config'; 
 import './playwright/crowdstrike.js';
+import './playwright/slack.js';
 
 
 import App from "./app.js";
