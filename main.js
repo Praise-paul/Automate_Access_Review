@@ -33,8 +33,8 @@ import { cloudflareAdapter } from "./playwright/cloudflare.js";
 const FETCHERS = {
   slack: slackUsers,
   crowdstrike: crowdstrikeUsers,
+  cloudflare: cloudflareUsers,
   oci: ociUsers,
-  cloudflare: cloudflareUsers
 };
 
 /* ============================

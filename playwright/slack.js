@@ -1,19 +1,29 @@
 import 'dotenv/config';
-
 import { generateSync } from 'otplib';
 
 export const slackAdapter = {
   userDataDir: "playwright/profiles/slack",
   headless: false,
+  name: "SLACK",
+  dashboardUrl: "https://app.slack.com/manage/E08D7Q2A73R/people",
+  
+  async isLoggedIn(page) {
+    try {
+        // Look for the "People" header or the Org Admin table
+        await page.waitForSelector('[data-qa="org_members_table_header"]', { timeout: 8000 });
+        return true;
+    } catch (e) {
+        return false; // Selector not found, must login
+    }
+  },
 
   selector: [
-  '[data-qa="org_members_table"]',
-  '[data-qa="org_members_table_container"]',
-  '[data-qa="org_members_table_body"]',
-  '[data-qa="org_members_table_header"]',
-  // fallback: any visible table in the manage people view
-  'table',
-].join(","),
+    '[data-qa="org_members_table"]',
+    '[data-qa="org_members_table_container"]',
+    '[data-qa="org_members_table_body"]',
+    '[data-qa="org_members_table_header"]',
+    'table',
+  ].join(","),
 
   async login(page) {
     console.log("[SLACK] Opening People admin page");
@@ -34,79 +44,58 @@ export const slackAdapter = {
     await page.fill('input[name="password"]', process.env.JUMPCLOUD_PASSWORD);
     await page.click('button[data-automation="loginButton"]');
 
-    // Step 3: Handle the JumpCloud MFA selection
-    console.log("[SLACK] Handling MFA selection...");
-
-    const chooseDifferentWay = 'button[data-test-id="UserLogin__MfaChooser__DisplayOptions"]';
-    const totpButtonSelector = 'button[data-test-id="UserLogin__MfaChooser__MfaButtons__totp"]';
+    // 4. MFA Input
+    console.log("[SLACK] Handling MFA input...");
 
     try {
-      // 1. Wait specifically for the 'Choose A Different Way' link on the Push screen
-      await page.waitForSelector(chooseDifferentWay, { state: 'visible', timeout: 15000 });
-      console.log("[SLACK] Found 'Choose A Different Way', clicking...");
-      await page.click(chooseDifferentWay);
+      // Wait for the 6-digit input boxes to appear
+      await page.waitForSelector('.TotpInput__totpInputContainer', { state: 'visible', timeout: 20000 });
 
-      // 2. Wait for the selection menu to appear and click the TOTP option
-      const totpBtn = page.locator(totpButtonSelector);
-      await totpBtn.waitFor({ state: 'visible', timeout: 10000 });
-      await totpBtn.click();
-
-      // 3. Wait for the 6-digit input container to be fully visible
-      await page.waitForSelector('.TotpInput__totpInputContainer', { state: 'visible', timeout: 10000 });
-
-      // Step 4: Handle the 6-digit input
       const mfaToken = generateSync({ secret: process.env.JUMPCLOUD_MFA_SECRET });
       const inputs = page.locator('.TotpInput__loginInput');
 
       console.log("[SLACK] Entering TOTP digits...");
       for (let i = 0; i < 6; i++) {
-        // We use pressSequentially with a tiny delay to prevent the race condition
-        await inputs.nth(i).pressSequentially(mfaToken[i], { delay: 100 });
+        await inputs.nth(i).pressSequentially(mfaToken[i], { delay: 150 });
       }
 
-      console.log("[SLACK] MFA submitted, waiting for redirect...");
-      
-      // Optional: Add a small wait here to ensure the login processes before the function ends
-      await page.waitForTimeout(5000); 
+      console.log("[SLACK] MFA submitted, waiting for Slack dashboard...");
+
+      // FIX: Instead of waitForNavigation, we wait for Slack's specific UI to appear.
+      // This is much faster and avoids the timeout error.
+      await page.waitForFunction(() => {
+        return document.body.innerText.includes("People") || 
+               document.querySelector('[data-qa="org_members_table_header"]');
+      }, { timeout: 30000 });
+
+      console.log("[SLACK] Redirect successful.");
 
     } catch (error) {
-      console.error("[SLACK] MFA Selection failed or timed out:", error.message);
-      // Keeps browser open for debugging if it fails
-      await page.waitForTimeout(10000);
-      throw error; // Re-throw so the main script knows it failed
+      console.error("[SLACK] Login sequence failed:", error.message);
+      throw error;
     }
   },
 
   async gotoUsers(page) {
     console.log("[SLACK] Waiting for admin UI");
-
+    // Ensure we are on a management URL
     await page.waitForURL(
-      url =>
-        url.href.includes("/manage/") ||
-        url.href.includes("enterprise.slack.com"),
-      { timeout: 5 * 60_000 }
+      url => url.href.includes("/manage/") || url.href.includes("enterprise.slack.com"),
+      { timeout: 60000 }
     );
 
-    await page.waitForTimeout(8000);
-
-    const filterBtn =
-      '[data-qa="org_members_table_header-filter-button"]';
-
-    await page.waitForSelector(filterBtn, { timeout: 180_000 });
+    // Apply Admin Filter
+    const filterBtn = '[data-qa="org_members_table_header-filter-button"]';
+    await page.waitForSelector(filterBtn, { timeout: 30000 });
     await page.click(filterBtn);
     await page.click('text=Org Admins & Owners');
 
-    // Verify filter applied
-    await page.waitForFunction(() =>
-      document.body.innerText.includes("Org Admins")
-    );
-
+    // Wait for the table to refresh with the filtered data
+    await page.waitForFunction(() => document.body.innerText.includes("Org Admins"));
     console.log("[SLACK] Admin filter applied");
   },
 
   async loggedInCheck(page) {
-    await page.waitForFunction(() =>
-      document.body.innerText.includes("People")
-    , { timeout: 30_000 });
+    await page.waitForFunction(() => document.body.innerText.includes("People"), { timeout: 30000 });
   }
 };

@@ -1,6 +1,14 @@
+import 'dotenv/config'; 
 export const cloudflareAdapter = {
   userDataDir: "playwright/profiles/cloudflare",
   headless: false,
+  name: "CLOUDFLARE",
+  dashboardUrl: "https://dash.cloudflare.com/a7b167e22d517a2054c054d1b5149694/members",
+  async isLoggedIn(page) {
+    const isLoginPath = page.url().includes("/login") || page.url().includes("/two-factor");
+    const hasNav = await page.locator('nav, [data-testid="account-switcher"]').isVisible();
+    return !isLoginPath && hasNav;
+  },
 
   selector: "table", // members table exists only post-login
 
