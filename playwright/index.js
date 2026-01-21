@@ -133,8 +133,8 @@ async function captureOciGroup(page, adapter, group, app) {
 
   await adapter.gotoGroupUsers(page, group.groupId, group.name);
 
-  console.log(`[OCI] Waiting 10s before screenshot...`);
-  await page.waitForTimeout(10_000);
+  console.log(`[OCI] Waiting 3s before screenshot...`);
+  await page.waitForTimeout(3_000);
 
   const file = path.join(dir, "users.png");
   await page.screenshot({ path: file, fullPage: false });

@@ -18,7 +18,7 @@ import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
 
 import { captureUserListEvidence } from "./playwright/index.js";
-import { ociAdapter } from "./playwright/oci.js";
+import { ociAdapter } from './playwright/oci.js';
 import { slackAdapter } from "./playwright/slack.js";
 import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
 import { caniphishAdapter } from "./playwright/caniphish.js";
