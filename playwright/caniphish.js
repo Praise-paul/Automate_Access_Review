@@ -18,31 +18,49 @@ export const caniphishAdapter = {
     console.log("[CANIPHISH] Opening login page...");
     await page.goto("https://caniphish.com/Auth/Login", { waitUntil: "domcontentloaded" });
 
-    // 1. Click the "Sign in with Single Sign-On" button
+    // 1. SSO Modal
     console.log("[CANIPHISH] Opening SSO Modal...");
     await page.waitForSelector('#ssoButton', { state: 'visible' });
     await page.click('#ssoButton');
 
-    // 2. Identification Modal - Use the email field you identified
+    // 2. Identification Modal
     console.log("[CANIPHISH] Entering email for identification...");
     await page.waitForSelector('#ssoSigninEmail', { state: 'visible' });
+    // Use fill for the identification modal
     await page.fill('#ssoSigninEmail', process.env.JUMPCLOUD_EMAIL);
-    
-    // 3. Click the "Sign in" button inside the modal
     await page.click('#ssoSigninButton');
 
-    // --- JumpCloud Workflow (Parallel to Slack but separate variables/logs) ---
+    // --- JumpCloud Workflow ---
     console.log("[CANIPHISH] Redirected to JumpCloud. Entering credentials...");
 
     // 4. JumpCloud Email
-    await page.waitForSelector('input[name="email"]', { timeout: 30000 });
-    await page.fill('input[name="email"]', process.env.JUMPCLOUD_EMAIL);
-    await page.click('button[data-automation="loginButton"]');
+    const emailSelector = 'input[name="email"]';
+    await page.waitForSelector(emailSelector);
+    await page.click(emailSelector); // Focus the field
+    await page.fill(emailSelector, process.env.JUMPCLOUD_EMAIL);
+    
+    // Crucial: Trigger validation by tabbing away or clicking outside
+    await page.keyboard.press('Tab'); 
+    
+    // Now wait for the button to be enabled before clicking
+    const loginBtn = 'button[data-automation="loginButton"]';
+    await page.waitForFunction((sel) => {
+        const btn = document.querySelector(sel);
+        return btn && !btn.disabled;
+    }, loginBtn);
+    await page.click(loginBtn);
 
     // 5. JumpCloud Password
-    await page.waitForSelector('input[name="password"]');
-    await page.fill('input[name="password"]', process.env.JUMPCLOUD_PASSWORD);
-    await page.click('button[data-automation="loginButton"]');
+    const passSelector = 'input[name="password"]';
+    await page.waitForSelector(passSelector);
+    await page.fill(passSelector, process.env.JUMPCLOUD_PASSWORD);
+    
+    // Ensure button is enabled for password step too
+    await page.waitForFunction((sel) => {
+        const btn = document.querySelector(sel);
+        return btn && !btn.disabled;
+    }, loginBtn);
+    await page.click(loginBtn);
 
     // 6. JumpCloud MFA Input
     console.log("[CANIPHISH] Handling JumpCloud MFA...");
@@ -50,21 +68,23 @@ export const caniphishAdapter = {
       await page.waitForSelector('.TotpInput__totpInputContainer', { state: 'visible', timeout: 20000 });
 
       const mfaToken = generateSync({ secret: process.env.JUMPCLOUD_MFA_SECRET });
+      // Use the simpler locator logic
       const inputs = page.locator('.TotpInput__loginInput');
 
       for (let i = 0; i < 6; i++) {
-        await inputs.nth(i).pressSequentially(mfaToken[i], { delay: 150 });
+        // Use fill for each box to ensure characters are registered
+        await inputs.nth(i).fill(mfaToken[i]);
       }
 
       console.log("[CANIPHISH] MFA submitted, waiting for redirect...");
 
       // 7. Wait for redirect back to the platform
       await page.waitForURL(
-        url => url.href.startsWith("https://caniphish.com/platform"),
+        url => url.href.includes("caniphish.com/platform"),
         { timeout: 60000 }
       );
 
-      console.log("[CANIPHISH] Login successful! ✅");
+      console.log("[CANIPHISH] Login successful!");
 
     } catch (error) {
       console.error("[CANIPHISH] SSO login sequence failed:", error.message);

@@ -125,7 +125,7 @@ for (const app of Object.keys(App)) {
     if (ociCsvRows.length) {
       await writeCSV({
         app: "oci",
-        group: "oci", // 👈 single file name
+        group: "oci", //  single file name
         rows: ociCsvRows
       });
     }
