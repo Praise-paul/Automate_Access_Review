@@ -1,74 +1,73 @@
-import 'dotenv/config'; 
+import 'dotenv/config';
+import readline from 'readline';
+
 export const csatAdapter = {
-  userDataDir: "playwright/profiles/csat",
-  headless: false,
-  selector: "body",
   name: "CSAT",
-  dashboardUrl: "https://csat.cisecurity.org/accounts/administration/",
-  async isLoggedIn(page) {
-    const isAuthPath = page.url().includes("/accounts/login") || page.url().includes("/verify/otp");
-    // Look for the "Logout" link or Admin nav
-    const hasAdminUI = await page.locator('[href*="logout"], [href*="/administration/"]').first().isVisible();
-    return !isAuthPath && hasAdminUI;
-  },
+  dashboardUrl: "https://csat.cisecurity.org/", 
+  // Selector targets the user list headers and the middle-aligned list containers
+  selector: '.ui.middle.aligned.list, .ui.sub.header',
 
   async login(page) {
-    console.log("[CSAT] Opening login page");
+    console.log("[CSAT] Navigating to login...");
+    await page.goto("https://csat.cisecurity.org/accounts/login/", { waitUntil: "domcontentloaded" });
 
-    await page.goto(
-      "https://csat.cisecurity.org/accounts/login/",
-      { waitUntil: "domcontentloaded" }
-    );
+    // 1. Enter Credentials
+    await page.waitForSelector('#id_username');
+    await page.fill('#id_username', process.env.CSAT_EMAIL);
+    await page.fill('#id_password', process.env.CSAT_PASSWORD);
+    
+    // 2. Click Login
+    console.log("[CSAT] Submitting credentials...");
+    await page.click('input[type="submit"][value="Login"]');
 
-    console.log("[CSAT] Complete login + OTP if prompted");
+    // 3. Handle Email OTP
+    console.log("[CSAT] Waiting for OTP page...");
+    await page.waitForSelector('#otp', { timeout: 15000 });
 
-    /**
-     * 🔒 HARD AUTH GATE
-     * Wait until OTP form is gone AND
-     * a logged-in-only UI element exists
-     */
-    await page.waitForFunction(() => {
-      const path = location.pathname;
+    // 4. MANUAL PAUSE: Get OTP from Terminal
+    const otpCode = await this.askForOTP();
+    
+    console.log(`[CSAT] Entering OTP: ${otpCode}`);
+    await page.fill('#otp', otpCode);
 
-      // Still in login / OTP flow
-      if (path.startsWith("/accounts/login") || path.startsWith("/accounts/verify/otp")) {
-        return false;
-      }
+    // 5. Submit OTP
+    await page.click('input[type="submit"][value="Verify OTP"]', { force: true });
 
-      // OTP form still visible
-      const otpInput =
-        document.querySelector('input[name="otp"]') ||
-        document.querySelector('input[type="tel"]');
+    // 6. Wait for landing page
+    await page.waitForURL(url => url.pathname === '/' || url.href.includes('assessments'), { timeout: 30000 });
+    console.log("[CSAT] Login Successful! ✅");
+  },
 
-      if (otpInput) return false;
+  async askForOTP() {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
 
-      // Logged-in UI signals (any one is enough)
-      return Boolean(
-        document.querySelector("nav") ||
-        document.querySelector('[href*="logout"]') ||
-        document.querySelector('[href*="/accounts/administration"]')
-      );
-    }, { timeout: 5 * 60_000 });
-
-    console.log("[CSAT] Authentication FULLY completed");
+    return new Promise(resolve => {
+      rl.question('\n[ACTION REQUIRED] Please check your email and enter the CSAT OTP: ', (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    });
   },
 
   async gotoUsers(page) {
-    console.log("[CSAT] Opening administration page");
-
-    await page.goto(
-      "https://csat.cisecurity.org/accounts/administration/",
-      { waitUntil: "domcontentloaded" }
-    );
-
-    // 🔒 Ensure we were NOT bounced back into OTP
-    await page.waitForFunction(() => {
-      return !location.pathname.startsWith("/accounts/verify/otp");
-    }, { timeout: 60_000 });
-
-    // Let admin UI settle
-    await page.waitForTimeout(4_000);
-
-    console.log("[CSAT] Administration page loaded");
+    const adminUrl = "https://csat.cisecurity.org/accounts/administration/";
+    console.log(`[CSAT] Navigating to Administration: ${adminUrl}`);
+    
+    // Switched to domcontentloaded per your request
+    await page.goto(adminUrl, { waitUntil: "domcontentloaded" });
+    
+    console.log("[CSAT] Waiting for Active Users list to render...");
+    try {
+      // Specifically wait for the list container found in your HTML
+      await page.waitForSelector('.ui.middle.aligned.list', { timeout: 15000 });
+      
+      // Essential buffer for CSAT as it loads user avatars and labels (Owner, etc.)
+      await page.waitForTimeout(4000); 
+    } catch (e) {
+      console.warn("[CSAT] User list did not appear in time, taking fallback screenshot...");
+    }
   }
 };
