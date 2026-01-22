@@ -13,56 +13,42 @@ export async function captureUserListEvidence(app, adapter, groups = []) {
 }
 
 async function _capture(app, adapter, groups) {
-  const context = await chromium.launchPersistentContext(adapter.userDataDir, {
+  const browser = await chromium.launch({
     headless: adapter.headless ?? false,
+  });
+
+  const context = await browser.newContext({
     viewport: { width: 1400, height: 1000 },
     ignoreHTTPSErrors: true
   });
 
-  const page = context.pages()[0] || await context.newPage();
+  const page = await context.newPage();
 
   try {
-    console.log(`[${app.toUpperCase()}] Checking session...`);
+    console.log(`[${app.toUpperCase()}] Starting review... `);
     
-    // Attempt to go to dashboard. OCI often redirects to login automatically.
-    // We use a try/catch and small timeout to avoid the ERR_ABORTED crash.
-    try {
-      await page.goto(adapter.dashboardUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    } catch (e) {
-      console.log(`[${app.toUpperCase()}] Initial navigation interrupted, checking state...`);
-    }
-
-    let isAlreadyIn = false;
-    try {
-      // Check for active session
-      await adapter.loggedInCheck(page, 8000); 
-      isAlreadyIn = true;
-      console.log(`[${app.toUpperCase()}] Session active! ✅`);
-    } catch (e) {
-      console.log(`[${app.toUpperCase()}] Session not found. Starting login flow... 🔑`);
-    }
-
-    /* ---------- LOGIN ---------- */
-    if (!isAlreadyIn) {
-      // If we aren't already in, run the adapter login
-      await adapter.login(page);
-      // Final confirmation
-      await adapter.loggedInCheck(page, 60000);
-      console.log(`[${app.toUpperCase()}] Login confirmed.`);
-    }
+    // We do NOT call page.goto here anymore.
+    // We let the adapter.login(page) handle its own starting URL.
+    await adapter.login(page);
+    
+    // Use 'load' instead of 'networkidle' to prevent Slack/OCI timeouts
+    // This waits for the post-login redirect to finish processing
+    await page.waitForLoadState('load', { timeout: 60000 });
 
     /* ---------- EVIDENCE CAPTURE ---------- */
     if (app === "oci") {
-      console.log(`[OCI] Starting group-wise capture for ${groups.length} groups...`);
+      console.log(`[OCI] Starting group-wise capture...`);
       for (const g of groups) {
         await captureOciGroup(page, adapter, g, app);
       }
     } else {
+      // For Crowdstrike/Slack, this calls adapter.gotoUsers(page)
       await captureGenericTable(app, page, adapter);
     }
 
   } finally {
-    await context.close();
+    await browser.close();
+    console.log(`[${app.toUpperCase()}] Browser closed. `);
   }
 }
 

@@ -36,12 +36,12 @@ export const slackAdapter = {
 
     // 2. JumpCloud Email
     await page.waitForSelector('input[name="email"]');
-    await page.fill('input[name="email"]', process.env.JUMPCLOUD_EMAIL);
+    await page.type('input[name="email"]', process.env.JUMPCLOUD_EMAIL);
     await page.click('button[data-automation="loginButton"]');
 
     // 3. JumpCloud Password
     await page.waitForSelector('input[name="password"]');
-    await page.fill('input[name="password"]', process.env.JUMPCLOUD_PASSWORD);
+    await page.type('input[name="password"]', process.env.JUMPCLOUD_PASSWORD);
     await page.click('button[data-automation="loginButton"]');
 
     // 4. MFA Input

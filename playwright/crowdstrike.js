@@ -9,27 +9,39 @@ export const crowdstrikeAdapter = {
 
   async login(page) {
     console.log("[CROWDSTRIKE] Starting automated login...");
-    
-    // We REMOVED page.goto here because index.js already handled it.
+    await page.goto(this.dashboardUrl, { waitUntil: "domcontentloaded" });
 
     // Step 1: Email
     await page.waitForSelector('[data-test-selector="email"]');
     await page.fill('[data-test-selector="email"]', process.env.CROWDSTRIKE_EMAIL);
-    await page.$eval('[data-test-selector="continue"]', el => el.click());
+    
+    // FORCE CLICK here to bypass the "glow" div intercepting the pointer
+    await page.click('[data-test-selector="continue"]', { force: true });
 
     // Step 2: Password
     await page.waitForSelector('[data-test-selector="password"]');
     await page.fill('[data-test-selector="password"]', process.env.CROWDSTRIKE_PASSWORD);
-    await page.$eval('[data-test-selector="submit"]', el => el.click());
+    
+    // FORCE CLICK here as well
+    await page.click('[data-test-selector="submit"]', { force: true });
 
     // Step 3: MFA
+    console.log("[CROWDSTRIKE] Handling MFA...");
     await page.waitForSelector('[name="verification-code-input-0"]');
     const token = generateSync({ secret: process.env.CROWDSTRIKE_MFA_SECRET });
-
+    
     for (let i = 0; i < 6; i++) {
+      // Use fill for MFA digits to be faster and more reliable
       await page.fill(`[name="verification-code-input-${i}"]`, token[i]);
     }
-    await page.click('[data-test-selector="mfa-code-submit"]', { force: true });
+    
+    // Click submit and WAIT for the URL to change
+    await Promise.all([
+      page.click('[data-test-selector="mfa-code-submit"]', { force: true }),
+      page.waitForURL(url => !url.href.includes('login'), { timeout: 60000 })
+    ]);
+    
+    console.log("[CROWDSTRIKE] Session established.");
   },
 
   async loggedInCheck(page, timeout = 15000) {
@@ -38,9 +50,11 @@ export const crowdstrikeAdapter = {
       { timeout }
     );
   },
-
-  async gotoUsers(page) {
+async gotoUsers(page) {
     console.log("[CROWDSTRIKE] Navigating to Users page");
-    await page.goto(this.dashboardUrl, { waitUntil: "networkidle" });
+    // Change "networkidle" to "load" to avoid the timeout you saw in the logs
+    await page.goto(this.dashboardUrl, { waitUntil: "load" });
+    // Specific wait for the table to ensure SPA rendering is done
+    await page.waitForSelector(this.selector, { timeout: 30000 });
   }
 };

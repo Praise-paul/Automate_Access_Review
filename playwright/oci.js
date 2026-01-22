@@ -14,19 +14,21 @@ export const ociAdapter = {
     // --- Phase 1: Cloud Account Name ---
     const accountInput = '#cloudAccountName';
     await page.waitForSelector(accountInput);
-    await page.fill(accountInput, "neospaceai");
-    await page.click('#cloudAccountButton');
+    await page.click(accountInput);
+    await page.focus(accountInput);
+    await page.type(accountInput, "neospaceai", { delay: 100 });
+    await page.click('#cloudAccountButton', { force: true });
 
     // --- Phase 2: Credentials ---
     console.log("[OCI] Entering credentials...");
     const userField = '#idcs-signin-basic-signin-form-username';
     await page.waitForSelector(userField);
-    await page.fill(userField, process.env.OCI_EMAIL);
+    await page.type(userField, process.env.OCI_EMAIL);
 
     // Using attribute selector for special characters in ID
     const passField = 'input[id="idcs-signin-basic-signin-form-password|input"]';
     await page.waitForSelector(passField);
-    await page.fill(passField, process.env.OCI_PASSWORD);
+    await page.type(passField, process.env.OCI_PASSWORD);
 
     await page.click('#idcs-signin-basic-signin-form-submit button');
 
@@ -37,15 +39,16 @@ export const ociAdapter = {
 
     const token = generateSync({ secret: process.env.OCI_MFA_SECRET });
     console.log("[OCI] Entering MFA Token:", token);
-    await page.fill(mfaInput, token);
+    await page.type(mfaInput, token);
 
     const verifyBtn = '#idcs-mfa-mfa-auth-totp-submit-button button';
     await page.waitForSelector(verifyBtn);
     await page.click(verifyBtn);
 
     // --- Phase 4: Handle Post-MFA Redirects ---
-    // Instead of forcing a URL immediately, we wait for OCI to finish its internal redirect
-    console.log("[OCI] Waiting for OCI to stabilize after login...");
+    console.log("[OCI] Waiting for session stabilization...");
+    // Wait for the Oracle dashboard to appear before forcing navigation
+    await page.waitForLoadState('load'); 
     await page.waitForTimeout(5000); 
 
     const identityHome = 
@@ -53,8 +56,7 @@ export const ociAdapter = {
       `${process.env.OCI_DOMAIN_OCID}` +
       `/users?region=${process.env.OCI_REGION}`;
 
-    console.log("[OCI] Forcing Identity console load...");
-    // Switched to domcontentloaded to prevent the ERR_ABORTED timeout
+    console.log("[OCI] Navigating to Identity console...");
     await page.goto(identityHome, { waitUntil: "domcontentloaded" });
   },
 
@@ -62,7 +64,7 @@ export const ociAdapter = {
     console.log("[OCI] Verifying Identity console readiness");
     await page.waitForURL(
       url => url.href.includes("/identity/domains/"),
-      { timeout: 180_000 }
+      { timeout: 3000 }
     );
     console.log("[OCI] Identity console is ready");
   },
