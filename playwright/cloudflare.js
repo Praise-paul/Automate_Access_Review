@@ -26,8 +26,9 @@ export const cloudflareAdapter = {
     await page.waitForTimeout(3000);
 
     const isBlocked = await loginBtn.isDisabled();
+    await page.waitForTimeout(3000);
     if (isBlocked) {
-      console.log("[CLOUDFLARE] Captcha detected. Attempting simulated human interaction...");
+      console.log("[CLOUDFLARE] Captcha detected. ");
       
       // Attempt to find the widget area and hover/click
       try {

@@ -15,40 +15,50 @@ export async function captureUserListEvidence(app, adapter, groups = []) {
 async function _capture(app, adapter, groups) {
   const browser = await chromium.launch({
     headless: adapter.headless ?? false,
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process' 
+    ]
   });
 
   const context = await browser.newContext({
     viewport: { width: 1400, height: 1000 },
-    ignoreHTTPSErrors: true
   });
+
+  // --- SELECTIVE STEALTH ---
+  // We only hide the 'webdriver' property for Cloudflare.
+  // This prevents JumpCloud from getting confused by fingerprint changes.
+  if (app.toLowerCase() === "cloudflare") {
+    console.log("[CLOUDFLARE] Applying lightweight stealth... 🛡️");
+    await context.addInitScript(() => {
+      // Deletes the 'webdriver' property so Cloudflare doesn't see it
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
+  }
 
   const page = await context.newPage();
 
   try {
-    console.log(`[${app.toUpperCase()}] Starting review... `);
+    console.log(`[${app.toUpperCase()}] Starting fresh review... 🧹`);
     
-    // We do NOT call page.goto here anymore.
-    // We let the adapter.login(page) handle its own starting URL.
+    // Standard flow: Login -> Load -> Capture
     await adapter.login(page);
     
-    // Use 'load' instead of 'networkidle' to prevent Slack/OCI timeouts
-    // This waits for the post-login redirect to finish processing
+    // We use 'load' to be safe for Slack/JumpCloud
     await page.waitForLoadState('load', { timeout: 60000 });
 
     /* ---------- EVIDENCE CAPTURE ---------- */
     if (app === "oci") {
-      console.log(`[OCI] Starting group-wise capture...`);
       for (const g of groups) {
         await captureOciGroup(page, adapter, g, app);
       }
     } else {
-      // For Crowdstrike/Slack, this calls adapter.gotoUsers(page)
       await captureGenericTable(app, page, adapter);
     }
 
   } finally {
     await browser.close();
-    console.log(`[${app.toUpperCase()}] Browser closed. `);
+    console.log(`[${app.toUpperCase()}] Browser closed. ✅`);
   }
 }
 

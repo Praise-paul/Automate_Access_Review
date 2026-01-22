@@ -36,12 +36,12 @@ export const slackAdapter = {
 
     // 2. JumpCloud Email
     await page.waitForSelector('input[name="email"]');
-    await page.type('input[name="email"]', {delay: 100}, process.env.JUMPCLOUD_EMAIL);
+    await page.type('input[name="email"]', process.env.JUMPCLOUD_EMAIL, {delay: 100});
     await page.click('button[data-automation="loginButton"]');
 
     // 3. JumpCloud Password
     await page.waitForSelector('input[name="password"]');
-    await page.type('input[name="password"]', {delay: 100}, process.env.JUMPCLOUD_PASSWORD);
+    await page.type('input[name="password"]', process.env.JUMPCLOUD_PASSWORD, {delay: 100});
     await page.click('button[data-automation="loginButton"]');
 
     // 4. MFA Input
@@ -51,7 +51,7 @@ export const slackAdapter = {
       // Wait for the 6-digit input boxes to appear
       await page.waitForSelector('.TotpInput__totpInputContainer', { state: 'visible', timeout: 20000 });
 
-      const mfaToken = generateSync({ secret: process.env.JUMPCLOUD_MFA_SECRET });
+      const mfaToken = String(generateSync({ secret: String(process.env.JUMPCLOUD_MFA_SECRET) }));
       const inputs = page.locator('.TotpInput__loginInput');
 
       console.log("[SLACK] Entering TOTP digits...");

@@ -25,6 +25,9 @@ import { caniphishAdapter } from "./playwright/caniphish.js";
 import { csatAdapter } from "./playwright/csat.js";
 import { cloudflareAdapter } from "./playwright/cloudflare.js";
 
+// Auto mode: if true, skips confirmation prompts
+const AUTO_MODE = true;
+
 
 /* ============================
    FETCHERS
@@ -52,10 +55,18 @@ console.log(`[INIT] Loaded ${ALL_JC_GROUPS.length} groups`);
 for (const app of Object.keys(App)) {
   console.log(`\n=== ${app.toUpperCase()} ===`);
 
+  if (!AUTO_MODE) {
   if (!(await confirmApp(app))) {
     console.log(`Skipping ${app.toUpperCase()}`);
     continue;
   }
+} else {
+  // AUTO MODE behavior
+  if (app === "csat") {
+    console.log("Skipping CSAT (AUTO_MODE enabled)");
+    continue;
+  }
+}
 
   const cfg = App[app];
 
@@ -72,11 +83,36 @@ for (const app of Object.keys(App)) {
     continue;
   }
 
-  /* ----- GROUP SELECTION ----- */
-  const selectedGroups =
+  // ============================
+// GROUP SELECTION
+// ============================
+let selectedGroups = [];
+
+if (AUTO_MODE) {
+  if (app === "oci") {
+    // OCI always uses all groups
+    selectedGroups = relevantGroups;
+  } else {
+    // Slack → index 1, all others → index 0
+    const index = app === "slack" ? 1 : 0;
+
+    if (!relevantGroups[index]) {
+      console.warn(
+        `[AUTO_MODE] No group at index ${index} for ${app.toUpperCase()}, skipping`
+      );
+      continue;
+    }
+
+    selectedGroups = [relevantGroups[index]];
+  }
+} else {
+  // Interactive mode (current behavior)
+  selectedGroups =
     app === "oci"
       ? relevantGroups
       : selectGroups(app, relevantGroups);
+}
+
 
   if (!selectedGroups.length) {
     console.log("No groups selected, skipping.");
@@ -213,12 +249,14 @@ const actual = await FETCHERS[app]({ groups: selectedGroups });
   if (app === "crowdstrike") {
     await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
   }
-
+  
+/*
   if (app === "cloudflare") {
   console.log("\n[CLOUDFLARE] Capturing UI evidence...");
   await captureUserListEvidence("cloudflare", cloudflareAdapter);
 }
 
+*/
 
 }
 
