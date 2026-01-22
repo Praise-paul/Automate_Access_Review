@@ -2,15 +2,18 @@ import 'dotenv/config';
 import { generateSync } from 'otplib';
 
 export const crowdstrikeAdapter = {
+  name: "CROWDSTRIKE",
   userDataDir: "playwright/profiles/crowdstrike",
-  headless: false,
+  dashboardUrl: "https://falcon.us-2.crowdstrike.com/users-v2", // Use your working URL
   selector: '[data-test-selector="users-table"], table',
 
   async login(page) {
     console.log("[CROWDSTRIKE] Starting automated login...");
-    await page.goto("https://falcon.us-2.crowdstrike.com/login/");
+    
+    // We REMOVED page.goto here because index.js already handled it.
 
     // Step 1: Email
+    await page.waitForSelector('[data-test-selector="email"]');
     await page.fill('[data-test-selector="email"]', process.env.CROWDSTRIKE_EMAIL);
     await page.$eval('[data-test-selector="continue"]', el => el.click());
 
@@ -21,30 +24,23 @@ export const crowdstrikeAdapter = {
 
     // Step 3: MFA
     await page.waitForSelector('[name="verification-code-input-0"]');
+    const token = generateSync({ secret: process.env.CROWDSTRIKE_MFA_SECRET });
 
-    const token = generateSync({
-      secret: process.env.CROWDSTRIKE_MFA_SECRET,
-    });
-
-    // Fill the 6 MFA boxes
     for (let i = 0; i < 6; i++) {
       await page.fill(`[name="verification-code-input-${i}"]`, token[i]);
     }
-
     await page.click('[data-test-selector="mfa-code-submit"]', { force: true });
+  },
+
+  async loggedInCheck(page, timeout = 15000) {
+    await page.waitForURL(
+      url => url.href.includes("/hub") || url.href.includes("/users-v2"),
+      { timeout }
+    );
   },
 
   async gotoUsers(page) {
     console.log("[CROWDSTRIKE] Navigating to Users page");
-    await page.goto("https://falcon.us-2.crowdstrike.com/users-v2", {
-      waitUntil: "networkidle"
-    });
-  },
-
-  async loggedInCheck(page) {
-    await page.waitForURL(
-      url => url.href.includes("/hub") || url.href.includes("/users-v2"),
-      { timeout: 15_000 }
-    );
+    await page.goto(this.dashboardUrl, { waitUntil: "networkidle" });
   }
 };

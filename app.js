@@ -6,10 +6,6 @@ export default {
   crowdstrike: {
     keywords: ["crowdstrike", "falcon"]
   },
-
-  oci: {
-    autoGroupPrefix: "OracleOCI-"
-  },
   caniphish: {
     keywords: ["caniphish"],
     evidenceOnly: true
@@ -20,6 +16,8 @@ export default {
 },
 cloudflare: {
   keywords: ["cloudflare", "cf"]
-}
-
+},
+oci: {
+    autoGroupPrefix: "OracleOCI-"
+  },
 };
