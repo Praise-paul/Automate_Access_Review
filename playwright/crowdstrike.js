@@ -13,14 +13,14 @@ export const crowdstrikeAdapter = {
 
     // Step 1: Email
     await page.waitForSelector('[data-test-selector="email"]');
-    await page.fill('[data-test-selector="email"]', process.env.CROWDSTRIKE_EMAIL);
+    await page.type('[data-test-selector="email"]', process.env.CROWDSTRIKE_EMAIL, {delay: 100});
     
     // FORCE CLICK here to bypass the "glow" div intercepting the pointer
     await page.click('[data-test-selector="continue"]', { force: true });
 
     // Step 2: Password
     await page.waitForSelector('[data-test-selector="password"]');
-    await page.fill('[data-test-selector="password"]', process.env.CROWDSTRIKE_PASSWORD);
+    await page.type('[data-test-selector="password"]', process.env.CROWDSTRIKE_PASSWORD, {delay: 100});
     
     // FORCE CLICK here as well
     await page.click('[data-test-selector="submit"]', { force: true });

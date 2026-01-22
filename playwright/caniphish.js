@@ -27,7 +27,7 @@ export const caniphishAdapter = {
     console.log("[CANIPHISH] Entering email for identification...");
     await page.waitForSelector('#ssoSigninEmail', { state: 'visible' });
     // Use fill for the identification modal
-    await page.fill('#ssoSigninEmail', process.env.JUMPCLOUD_EMAIL);
+    await page.type('#ssoSigninEmail', process.env.JUMPCLOUD_EMAIL, { delay: 100 });
     await page.click('#ssoSigninButton');
 
     // --- JumpCloud Workflow ---
@@ -37,7 +37,7 @@ export const caniphishAdapter = {
     const emailSelector = 'input[name="email"]';
     await page.waitForSelector(emailSelector);
     await page.click(emailSelector); // Focus the field
-    await page.fill(emailSelector, process.env.JUMPCLOUD_EMAIL);
+    await page.type(emailSelector, process.env.JUMPCLOUD_EMAIL, { delay: 100 });
     
     // Crucial: Trigger validation by tabbing away or clicking outside
     await page.keyboard.press('Tab'); 
@@ -53,7 +53,7 @@ export const caniphishAdapter = {
     // 5. JumpCloud Password
     const passSelector = 'input[name="password"]';
     await page.waitForSelector(passSelector);
-    await page.fill(passSelector, process.env.JUMPCLOUD_PASSWORD);
+    await page.type(passSelector, process.env.JUMPCLOUD_PASSWORD, { delay: 100 });
     
     // Ensure button is enabled for password step too
     await page.waitForFunction((sel) => {

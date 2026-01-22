@@ -23,12 +23,12 @@ export const ociAdapter = {
     console.log("[OCI] Entering credentials...");
     const userField = '#idcs-signin-basic-signin-form-username';
     await page.waitForSelector(userField);
-    await page.type(userField, process.env.OCI_EMAIL);
+    await page.type(userField, process.env.OCI_EMAIL, { delay: 100 });
 
     // Using attribute selector for special characters in ID
     const passField = 'input[id="idcs-signin-basic-signin-form-password|input"]';
     await page.waitForSelector(passField);
-    await page.type(passField, process.env.OCI_PASSWORD);
+    await page.type(passField, process.env.OCI_PASSWORD, { delay: 100 });
 
     await page.click('#idcs-signin-basic-signin-form-submit button');
 

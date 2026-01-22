@@ -1,76 +1,83 @@
-import 'dotenv/config'; 
-export const cloudflareAdapter = {
-  userDataDir: "playwright/profiles/cloudflare",
-  headless: false,
-  name: "CLOUDFLARE",
-  dashboardUrl: "https://dash.cloudflare.com/a7b167e22d517a2054c054d1b5149694/members",
-  async isLoggedIn(page) {
-    const isLoginPath = page.url().includes("/login") || page.url().includes("/two-factor");
-    const hasNav = await page.locator('nav, [data-testid="account-switcher"]').isVisible();
-    return !isLoginPath && hasNav;
-  },
+import 'dotenv/config';
+import { generateSync } from 'otplib';
 
-  selector: "table", // members table exists only post-login
+export const cloudflareAdapter = {
+  name: "CLOUDFLARE",
+  dashboardUrl: "https://dash.cloudflare.com/login",
+  // Selector for the members table you provided
+  selector: 'table[role="table"], h1:has-text("Members")',
 
   async login(page) {
-  console.log("[CLOUDFLARE] Opening login page");
+    console.log("[CLOUDFLARE] Navigating to login (Stealth Enabled)...");
+    await page.goto(this.dashboardUrl, { waitUntil: "domcontentloaded" });
 
-  await page.goto(
-    "https://dash.cloudflare.com/login",
-    { waitUntil: "domcontentloaded" }
-  );
+    // 1. Enter Credentials
+    await page.waitForSelector('#email');
+    await page.fill('#email', process.env.CLOUDFLARE_EMAIL);
+    await page.fill('#password', process.env.CLOUDFLARE_PASSWORD);
 
-  console.log("[CLOUDFLARE] Use Google SSO and complete MFA");
+    // 2. THE AUTOMATIC BYPASS
+    console.log("[CLOUDFLARE] Monitoring Turnstile challenge...");
 
-  await page.waitForFunction(() => {
-    const { hostname, pathname } = location;
+    // Wait for the button. If it's disabled, we know there's a captcha.
+    const loginBtn = page.getByTestId('login-submit-button');
+    
+    // Give it a few seconds to see if it auto-solves thanks to Stealth
+    await page.waitForTimeout(3000);
 
-    // Still inside Google SSO — ignore
-    if (hostname.includes("google.com")) {
-      return false;
+    const isBlocked = await loginBtn.isDisabled();
+    if (isBlocked) {
+      console.log("[CLOUDFLARE] Captcha detected. Attempting simulated human interaction...");
+      
+      // Attempt to find the widget area and hover/click
+      try {
+        const frame = page.frames().find(f => f.url().includes('challenges.cloudflare.com'));
+        if (frame) {
+            // We move the mouse to the center of the iframe
+            const box = await page.locator('iframe[src*="challenges.cloudflare.com"]').boundingBox();
+            if (box) {
+                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 20 });
+                await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+            }
+        }
+      } catch (err) {
+        console.log("[CLOUDFLARE] Auto-click failed, waiting for manual help or auto-solve...");
+      }
     }
 
-    // Must be back on Cloudflare dashboard
-    if (!hostname.endsWith("cloudflare.com")) {
-      return false;
-    }
+    // 3. Wait for the button to enable
+    await page.waitForFunction(() => {
+        const btn = document.querySelector('button[data-testid="login-submit-button"]');
+        return btn && !btn.disabled;
+    }, { timeout: 45000 });
 
-    // Still in Cloudflare login / MFA
-    if (
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/two-factor")
-    ) {
-      return false;
-    }
+    await loginBtn.click();
 
-    // Logged-in Cloudflare UI signals
-    return Boolean(
-      document.querySelector("nav") ||
-      document.querySelector('[href*="/members"]') ||
-      document.querySelector('[data-testid="account-switcher"]')
-    );
-  }, { timeout: 5 * 60_000 });
-
-  console.log("[CLOUDFLARE] Authentication FULLY completed");
-},
+    // 4. TOTP Verification
+    await page.waitForSelector('#twofactor_token');
+    const token = generateSync({ secret: process.env.CLOUDFLARE_MFA_SECRET });
+    await page.fill('#twofactor_token', token);
+    await page.click('button[data-testid="two-factor-login-submit-button"]');
+    
+    // 5. Select Neospace Account
+    await page.waitForSelector('text="Neospace"');
+    await page.click('text="Neospace"');
+  },
 
   async gotoUsers(page) {
-    console.log("[CLOUDFLARE] Opening Members page");
+    // We use the ID from the HTML you provided: a7b167e22d517a2054c054d1b5149694
+    const membersUrl = page.url().split('/').slice(0, 4).join('/') + '/members';
+    
+    console.log(`[CLOUDFLARE] Navigating to members page...`);
+    await page.goto(membersUrl, { waitUntil: "domcontentloaded" });
 
-    await page.goto(
-      "https://dash.cloudflare.com/a7b167e22d517a2054c054d1b5149694/members",
-      { waitUntil: "domcontentloaded" }
-    );
-
-    // 🔒 Ensure we were not bounced back to login
-    await page.waitForFunction(() => {
-      return !location.pathname.startsWith("/login") &&
-             !location.pathname.startsWith("/two-factor");
-    }, { timeout: 60_000 });
-
-    // Allow SPA hydration
-    await page.waitForTimeout(6_000);
-
-    console.log("[CLOUDFLARE] Members page loaded");
+    // Wait for the specific table with the member list
+    try {
+      await page.waitForSelector('table[role="table"]', { timeout: 20000 });
+      // Buffer for the "Active" badges to render
+      await page.waitForTimeout(3000); 
+    } catch (e) {
+      console.warn("[CLOUDFLARE] Members table not detected, taking fallback screenshot.");
+    }
   }
 };
