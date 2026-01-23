@@ -250,13 +250,12 @@ const actual = await FETCHERS[app]({ groups: selectedGroups });
     await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
   }
   
-/*
+
   if (app === "cloudflare") {
   console.log("\n[CLOUDFLARE] Capturing UI evidence...");
   await captureUserListEvidence("cloudflare", cloudflareAdapter);
 }
 
-*/
 
 }
 

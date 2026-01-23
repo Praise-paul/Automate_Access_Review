@@ -18,7 +18,7 @@ export const cloudflareAdapter = {
 
     // 2. THE AUTOMATIC BYPASS
     console.log("[CLOUDFLARE] Monitoring Turnstile challenge...");
-
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     // Wait for the button. If it's disabled, we know there's a captcha.
     const loginBtn = page.getByTestId('login-submit-button');
     
@@ -27,23 +27,38 @@ export const cloudflareAdapter = {
 
     const isBlocked = await loginBtn.isDisabled();
     await page.waitForTimeout(3000);
-    if (isBlocked) {
-      console.log("[CLOUDFLARE] Captcha detected. ");
-      
-      // Attempt to find the widget area and hover/click
-      try {
-        const frame = page.frames().find(f => f.url().includes('challenges.cloudflare.com'));
-        if (frame) {
-            // We move the mouse to the center of the iframe
-            const box = await page.locator('iframe[src*="challenges.cloudflare.com"]').boundingBox();
+   if (isBlocked) {
+        console.log("[CLOUDFLARE] Captcha detected.");
+        
+        try {
+            const containerSelector = '[data-testid="challenge-widget-container"]';
+            await page.waitForSelector(containerSelector, { state: 'visible', timeout: 20000 });
+            
+            const container = await page.$(containerSelector);
+            const box = await container.boundingBox();
+            
             if (box) {
+                // Point A: Initial hover to "wake up" the widget (center)
+                // Point B: The actual checkbox (x+45)
+                const clickX = box.x + 45; 
+                const clickY = box.y + (box.height / 2);
+
+                // 1. Move to center first to mimic human focus
                 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 20 });
-                await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+                await delay(2000); 
+
+                // 2. Slow, curved movement to the actual checkbox
+                await page.mouse.move(clickX, clickY, { steps: 35 });
+
+                // 3. Final hesitation before clicking (Crucial to avoid bot detection)
+                await delay(2000);
+                await page.mouse.click(clickX, clickY);
+                
+                console.log(`[CLOUDFLARE] Clicked coordinates: ${Math.round(clickX)}, ${Math.round(clickY)}`);
             }
+        } catch (err) {
+            console.log("[CLOUDFLARE] Auto-click failed, waiting for manual help or auto-solve...");
         }
-      } catch (err) {
-        console.log("[CLOUDFLARE] Auto-click failed, waiting for manual help or auto-solve...");
-      }
     }
 
     // 3. Wait for the button to enable
@@ -82,3 +97,4 @@ export const cloudflareAdapter = {
     }
   }
 };
+
