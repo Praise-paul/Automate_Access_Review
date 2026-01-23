@@ -75,16 +75,16 @@ If you can follow arrows, you can understand this system.
 
 ```
 ##  High-Level Execution Flow (Sequence Diagram)
-![Tool Preview](sequence-dig.png)
+![Tool Preview](documentation/sequence-dig.png)
 
 ## Authentication Flow (MFA + Bot Detection)
-![Authentication Preview](sequence-dig2.png)
+![Authentication Preview](documentation/sequence-dig2.png)
 
 ## Adapter Lifecycle Flowchart
-![Lifecycle Flowchart](flowchart.png)
+![Lifecycle Flowchart](documentation/flowchart.png)
 
 ## Full System Flowchart
-![System Flowchart](system-flowchart.png)
+![System Flowchart](documentation/system-flowchart.png)
 
 ##  Core Design Philosophy
 
@@ -148,7 +148,7 @@ Automate_Access_Review/
 
 ---
 
-## 🔹 `main.js` — The Brain (Orchestrator)
+## `main.js` — The Brain (Orchestrator)
 
 **What it does:**
 - Entry point of the application
@@ -285,7 +285,6 @@ Evidence is stored as:
 ```test
 evidence/
 └── cloudflare/
-└── Admins/
 ├── 2024-10-21_10-30.png
 └── 2024-10-21_10-31.png
 ```
@@ -416,7 +415,7 @@ Solution: **Xvfb (X Virtual Frame Buffer)**
 
 ### Lambda Execution Flow
 
-![Lambda Function Flow](lambda_fucntion_flow.png)
+![Lambda Function Flow](documentation/lambda_fucntion_flow.png)
 
 ### Example Lambda Bootstrap Script
 
@@ -437,7 +436,7 @@ node main.js
 ```
 
 ### OCi Functions Flow
-![OCI Functions Flow](oci_functions_flow.png)
+![OCI Functions Flow](documentation/oci_functions_flow.png)
 
 ### Best Practices
 
