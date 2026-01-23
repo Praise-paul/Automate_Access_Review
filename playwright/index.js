@@ -14,22 +14,27 @@ export async function captureUserListEvidence(app, adapter, groups = []) {
 
 async function _capture(app, adapter, groups) {
   const browser = await chromium.launch({
-    headless: adapter.headless ?? false,
+    headless: false, //  ====================== true for headless mode ======================
     args: [
       '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process' 
+      '--disable-features=IsolateOrigins,site-per-process' ,
+      '--use-gl=desktop', // Helps with WebGL fingerprinting
+      '--window-size=1920,1080',
+      '--no-sandbox',
+      //'--headless=new'      ====================== Uncomment for headless mode ======================
     ]
   });
 
   const context = await browser.newContext({
     viewport: { width: 1400, height: 1000 },
+    deviceScaleFactor: 1,
   });
 
   // --- SELECTIVE STEALTH ---
   // We only hide the 'webdriver' property for Cloudflare.
   // This prevents JumpCloud from getting confused by fingerprint changes.
   if (app.toLowerCase() === "cloudflare") {
-    console.log("[CLOUDFLARE] Applying lightweight stealth... 🛡️");
+    console.log("[CLOUDFLARE] Applying lightweight stealth...");
     await context.addInitScript(() => {
       // Deletes the 'webdriver' property so Cloudflare doesn't see it
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
@@ -39,7 +44,7 @@ async function _capture(app, adapter, groups) {
   const page = await context.newPage();
 
   try {
-    console.log(`[${app.toUpperCase()}] Starting fresh review... 🧹`);
+    console.log(`[${app.toUpperCase()}] Starting fresh review... `);
     
     // Standard flow: Login -> Load -> Capture
     await adapter.login(page);
@@ -58,7 +63,7 @@ async function _capture(app, adapter, groups) {
 
   } finally {
     await browser.close();
-    console.log(`[${app.toUpperCase()}] Browser closed. ✅`);
+    console.log(`[${app.toUpperCase()}] Browser closed. `);
   }
 }
 
@@ -80,8 +85,8 @@ async function captureOciGroup(page, adapter, group, app) {
   fs.mkdirSync(dir, { recursive: true });
 
   await adapter.gotoGroupUsers(page, group.groupId, group.name);
-  console.log(`[OCI] Waiting 3s before screenshot...`);
-  await page.waitForTimeout(3000);
+  console.log(`[OCI] Waiting 2s before screenshot...`);
+  await page.waitForTimeout(2000);
 
   const file = path.join(dir, "users.png");
   await page.screenshot({ path: file, fullPage: false });

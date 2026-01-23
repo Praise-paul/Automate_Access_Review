@@ -8,9 +8,23 @@ export const cloudflareAdapter = {
   selector: 'table[role="table"], h1:has-text("Members")',
 
   async login(page) {
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'en-US,en;q=0.9'
+    });
     console.log("[CLOUDFLARE] Navigating to login (Stealth Enabled)...");
     await page.goto(this.dashboardUrl, { waitUntil: "domcontentloaded" });
 
+    try {
+      await page.waitForSelector('#email', { state: 'visible', timeout: 30000 });
+    } catch (e) {
+      // If headless is still getting blocked, Cloudflare might be showing a 
+      // full-page "Checking your browser" screen.
+      console.log("[CLOUDFLARE] Initial field not found. Checking for full-page challenge...");
+      await page.waitForTimeout(5000); 
+      await page.reload(); // Sometimes a reload clears the headless block
+      await page.waitForSelector('#email', { state: 'visible', timeout: 30000 });
+    }
+    
     // 1. Enter Credentials
     await page.waitForSelector('#email');
     await page.fill('#email', process.env.CLOUDFLARE_EMAIL);
