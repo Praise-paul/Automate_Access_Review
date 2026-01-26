@@ -4,7 +4,7 @@ import './playwright/slack.js';
 
 
 import App from "./app.js";
-import { listGroups, groupMembers } from "./jumpcloud.js";
+import { listGroups, groupMembers, getJumpCloudUserName } from "./jumpcloud.js";
 import { confirmApp, selectGroups, filterGroupsForApp } from "./groupSelector.js";
 
 import slackUsers from "./slack.js";
@@ -16,7 +16,7 @@ import cloudflareUsers from "./cloudflare.js";
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
-import { updateJiraTicket } from './jira.js';
+import { updateJiraTicket, createAccessTicket } from './jira.js';
 
 import { captureUserListEvidence } from "./playwright/index.js";
 import { ociAdapter } from './playwright/oci.js';
@@ -174,10 +174,18 @@ if (AUTO_MODE) {
   /* ============================
      OTHER APPS (Slack / CrowdStrike / etc.)
    ============================ */
-const expected = new Set();
+const allSelectedMembers = []; 
+const expectedEmails = new Set();
+
 for (const g of selectedGroups) {
-  const members = await groupMembers(g.id);
-  members.forEach(u => expected.add(u));
+  const members = await groupMembers(g.id); // Now returns [{email, name}]
+  members.forEach(m => {
+    expectedEmails.add(m.email);
+    // Add to our lookup list if not already there
+    if (!allSelectedMembers.find(existing => existing.email === m.email)) {
+      allSelectedMembers.push(m);
+    }
+  });
 }
 
 // 🔒 Evidence-only applications
@@ -190,7 +198,7 @@ if (cfg.evidenceOnly) {
 }
 
 const actual = await FETCHERS[app]({ groups: selectedGroups });
-const { unauthorized, missing } = diffSets(expected, actual);
+const { unauthorized, missing } = diffSets(expectedEmails, actual);
 
 // 1. Write CSV and capture the path automatically
 if (unauthorized.length) {
@@ -226,6 +234,18 @@ if (adapters[app]) {
     const friendlyName = app.charAt(0).toUpperCase() + app.slice(1);
     console.log(`[PROCESS] Initiating Jira update for ${friendlyName}...`);
     await updateJiraTicket(friendlyName, unauthorized, missing, evidenceFiles);
+
+    if (unauthorized.length > 0) {
+  console.log(`[PROCESS] Creating individual requests for ${unauthorized.length} unauthorized users...`);
+  
+  for (const email of unauthorized) {
+    // Search the list we created above for the name
+    const userName = await getJumpCloudUserName(email);
+    const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
+    
+    await createAccessTicket(userName, email, jcGroup);
+  }
+}
 }
 
 console.log("\n✔ Access review completed");

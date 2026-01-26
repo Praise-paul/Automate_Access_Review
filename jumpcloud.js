@@ -74,32 +74,74 @@ export async function groupMembers(groupId, debug = false) {
   if (!userIds.length) return new Set();
 
   // 2. Resolve IDs → Emails using direct user lookup (always supported)
-  const emails = new Set();
-for (const id of userIds) {
-  if (USER_CACHE.has(id)) {
-    emails.add(USER_CACHE.get(id));
-    continue;
+  const members = []; // Change from Set to Array of Objects
+
+  // 2. Resolve IDs → Details
+  for (const id of userIds) {
+    try {
+      let u;
+      if (USER_CACHE.has(id)) {
+        u = USER_CACHE.get(id);
+      } else {
+        const r = await axios.get(`${BASE_V1}/systemusers/${id}`, { headers: HEADERS });
+        u = r.data;
+        USER_CACHE.set(id, u);
+      }
+
+      const email = (u.email || u.username || "").toLowerCase().trim();
+      const name = `${u.firstname || ''} ${u.lastname || ''}`.trim() || email;
+
+      if (!email || u.system) continue;
+
+      members.push({ email, name });
+    } catch {
+      console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
+    }
   }
 
-  try {
-    const r = await axios.get(
-      `${BASE_V1}/systemusers/${id}`,
-      { headers: HEADERS }
-    );
-
-    const u = r.data;
-    const email = (u.email || u.username || "").toLowerCase().trim();
-
-    if (!email || u.system) continue;
-
-    USER_CACHE.set(id, email);
-    emails.add(email);
-
-  } catch {
-    console.warn(`[JUMPCLOUD] Failed to resolve user ${id}`);
-  }
+  return members; // Returns [{email, name}, ...]
 }
 
+/**
+ * Finds a user's name by email across the directory.
+ * Checks the local USER_CACHE first to save API calls.
+ */
+/**
+ * Finds a user's name by email.
+ * Prioritizes Cache -> v1 API (most reliable for simple filtering).
+ */
+export async function getJumpCloudUserName(email) {
+    const searchEmail = email.toLowerCase().trim();
 
-  return emails;
+    // 1. Check local cache first
+    for (const user of USER_CACHE.values()) {
+        const cachedEmail = (user.email || user.username || "").toLowerCase().trim();
+        if (cachedEmail === searchEmail) {
+            return `${user.firstname || ''} ${user.lastname || ''}`.trim() || searchEmail; 
+        }
+    }
+
+    // 2. Use v1 API Search (Reliable fallback)
+    try {
+        // v1 uses the query parameter 'filter' which is standard across all JC tenants
+        const response = await axios.get(`${BASE_V1}/systemusers`, {
+            headers: HEADERS,
+            params: { 
+                filter: `email:eq:${searchEmail}` 
+            }
+        });
+
+        const user = response.data.results?.[0]; 
+        
+        if (user) {
+            const fullName = `${user.firstname || ''} ${user.lastname || ''}`.trim();
+            // Store in cache so we don't hit the API for this user again
+            USER_CACHE.set(user.id || searchEmail, user);
+            return fullName || searchEmail;
+        }
+    } catch (err) {
+        console.error(`[JUMPCLOUD] Global search failed for ${searchEmail}: ${err.message}`);
+    }
+
+    return searchEmail; // Final fallback: return the email if no user is found
 }

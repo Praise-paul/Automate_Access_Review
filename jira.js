@@ -35,34 +35,55 @@ export async function updateJiraTicket(appName, unauthorized = [], missing = [],
         const issueKey = search.data.issues[0].key;
         console.log(`✅ Found Ticket: ${issueKey}`);
 
-        // 1. Build Comment
-        const commentBody = {
-            body: {
-                type: "doc", version: 1,
-                content: [
-                    {
-                        type: "heading", attrs: { level: 3 },
-                        content: [{ type: "text", text: `Access Review Result: ${appName}` }]
-                    },
-                    {
-                        type: "paragraph",
-                        content: [
-                            { type: "text", text: "Unauthorized:", marks: [{ type: "strong" }] },
-                            { type: "text", text: unauthorized.length ? `\n• ${unauthorized.join('\n• ')}` : " None" }
-                        ]
-                    },
-                    {
-                        type: "paragraph",
-                        content: [
-                            { type: "text", text: "Missing:", marks: [{ type: "strong" }] },
-                            { type: "text", text: missing.length ? `\n• ${missing.join('\n• ')}` : " None" }
-                        ]
-                    }
-                ]
-            }
-        };
+        let commentContent;
 
-        await axios.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/comment`, commentBody, { headers });
+if (unauthorized.length === 0 && missing.length === 0) {
+    // Content for a Perfect Match
+    commentContent = [
+        {
+            type: "paragraph",
+            content: [
+                { 
+                    type: "text", 
+                    text: `✅ Access Review Completed: The access list for ${appName} matches perfectly with the JumpCloud User Group. No discrepancies found.`,
+                    marks: [{ type: "strong" }] 
+                }
+            ]
+        }
+    ];
+} else {
+    // Your existing logic for reporting mismatches
+    commentContent = [
+        {
+            type: "heading", attrs: { level: 3 },
+            content: [{ type: "text", text: `Access Review Result: ${appName}` }]
+        },
+        {
+            type: "paragraph",
+            content: [
+                { type: "text", text: "Unauthorized:", marks: [{ type: "strong" }] },
+                { type: "text", text: unauthorized.length ? `\n• ${unauthorized.join('\n• ')}` : " None" }
+            ]
+        },
+        {
+            type: "paragraph",
+            content: [
+                { type: "text", text: "Missing:", marks: [{ type: "strong" }] },
+                { type: "text", text: missing.length ? `\n• ${missing.join('\n• ')}` : " None" }
+            ]
+        }
+    ];
+}
+
+const commentBody = {
+    body: {
+        type: "doc",
+        version: 1,
+        content: commentContent
+    }
+};
+
+await axios.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/comment`, commentBody, { headers });
 
         // 2. Upload Attachments (Handles absolute paths from main.js)
         for (const filePath of filePaths) {
@@ -83,4 +104,42 @@ export async function updateJiraTicket(appName, unauthorized = [], missing = [],
     } catch (err) {
         console.error('❌ Jira Update Failed:', err.response?.data || err.message);
     }
+}
+
+/**
+ * Create a new ticket for an unauthorized user (Test Version)
+ */
+export async function createAccessTicket(userName, userEmail, groupName) {
+    const headers = getAuthHeaders();
+    const requestTypeId = "10797"; 
+
+    const body = {
+        "serviceDeskId": "397", 
+        "requestTypeId": requestTypeId,
+        "requestFieldValues": {
+            // Name goes in the Summary
+            "summary": `Request to Add ${userName} to Jumpcloud ${groupName}`,
+            
+            // Email goes in the Description (ADF format for Service Desk API)
+            "description": `Automated Access Review Findings:
+• User Name: ${userName}
+• User Email: ${userEmail}
+• Action: Missing from Jumpcloud group "${groupName}". 
+
+  Please verify if this user should be granted access or if their account in the application should be deactivated.`
+        }
+    };
+
+    try {
+        const res = await axios.post(`${BASE_URL}/rest/servicedeskapi/request`, body, { headers });
+        console.log(`✨ Created Request: ${res.data.issueKey} for ${userName}`);
+        return res.data.issueKey;
+    } catch (err) {
+        console.error(`❌ Failed to create ticket for ${userEmail}:`, err.response?.data || err.message);
+    }
+}
+
+const debug = async () =>{
+  const res = await axios.get(`${BASE_URL}/rest/servicedeskapi/servicedesk`, { headers: getAuthHeaders() });
+  console.log(res.data.values.map(sd => ({ id: sd.id, key: sd.projectKey })));
 }
