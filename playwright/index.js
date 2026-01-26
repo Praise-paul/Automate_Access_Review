@@ -5,10 +5,11 @@ import "dotenv/config";
 
 export async function captureUserListEvidence(app, adapter, groups = []) {
   try {
-    await _capture(app, adapter, groups);
+    return await _capture(app, adapter, groups);
   } catch (e) {
     console.warn(`[${app.toUpperCase()}] UI evidence failed`);
     console.warn(e.message);
+    return [];
   }
 }
 
@@ -40,59 +41,50 @@ async function _capture(app, adapter, groups) {
       Object.defineProperty(navigator, 'webdriver', { get: () => false });
     });
   }
-
-  const page = await context.newPage();
+const page = await context.newPage();
+  let capturedPaths = [];
 
   try {
-    console.log(`[${app.toUpperCase()}] Starting fresh review... `);
-    
-    // Standard flow: Login -> Load -> Capture
     await adapter.login(page);
-    
-    // We use 'load' to be safe for Slack/JumpCloud
     await page.waitForLoadState('load', { timeout: 60000 });
 
-    /* ---------- EVIDENCE CAPTURE ---------- */
     if (app === "oci") {
       for (const g of groups) {
-        await captureOciGroup(page, adapter, g, app);
+        // Capture and collect path
+        const p = await captureOciGroup(page, adapter, g, app);
+        capturedPaths.push(p);
       }
     } else {
-      await captureGenericTable(app, page, adapter);
+      // Capture and collect path
+      const p = await captureGenericTable(app, page, adapter);
+      capturedPaths.push(p);
     }
+    return capturedPaths; // Return the list of files to main.js
 
   } finally {
     await browser.close();
-    console.log(`[${app.toUpperCase()}] Browser closed. `);
   }
 }
 
 async function captureGenericTable(app, page, adapter) {
   const dir = path.join(process.cwd(), "evidence", app);
   fs.mkdirSync(dir, { recursive: true });
-
   await adapter.gotoUsers(page);
   await page.waitForSelector(adapter.selector, { timeout: 60000 });
   await page.waitForTimeout(3000);
 
-  const file = path.join(dir, `users-${timestamp()}.png`);
+  const file = path.join(dir, `users.png`);
   await page.screenshot({ path: file, fullPage: false });
-  console.log(`[${app.toUpperCase()}] Evidence saved → ${file}`);
+  return file; // Return path
 }
 
 async function captureOciGroup(page, adapter, group, app) {
-  const dir = path.join(process.cwd(), "evidence", app, group.name);
+ const dir = path.join(process.cwd(), "evidence", app, group.name);
   fs.mkdirSync(dir, { recursive: true });
-
   await adapter.gotoGroupUsers(page, group.groupId, group.name);
-  console.log(`[OCI] Waiting 2s before screenshot...`);
   await page.waitForTimeout(2000);
 
   const file = path.join(dir, "users.png");
   await page.screenshot({ path: file, fullPage: false });
-  console.log(`[OCI] Saved ${group.name}`);
-}
-
-function timestamp() {
-  return new Date().toISOString().replace(/[:.]/g, "-");
+  return file; // Return path
 }

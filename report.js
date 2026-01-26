@@ -3,7 +3,7 @@ import { createObjectCsvWriter } from "csv-writer";
 import fs from "fs";
 
 export default async function writeCSV({ app, group, rows }) {
-  if (!rows.length) return;
+  if (!rows.length) return null;
 
   const baseDir = path.join(
     process.cwd(),
@@ -28,4 +28,5 @@ export default async function writeCSV({ app, group, rows }) {
   });
 
   await csv.writeRecords(rows);
+  return file
 }

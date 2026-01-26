@@ -16,6 +16,7 @@ import cloudflareUsers from "./cloudflare.js";
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
+import { updateJiraTicket } from './jira.js';
 
 import { captureUserListEvidence } from "./playwright/index.js";
 import { ociAdapter } from './playwright/oci.js';
@@ -53,6 +54,7 @@ console.log(`[INIT] Loaded ${ALL_JC_GROUPS.length} groups`);
 ============================ */
 
 for (const app of Object.keys(App)) {
+  let evidenceFiles = [];
   console.log(`\n=== ${app.toUpperCase()} ===`);
 
   if (!AUTO_MODE) {
@@ -128,67 +130,40 @@ if (AUTO_MODE) {
      OCI ACCESS REVIEW
   ============================ */
 
-  if (app === "oci") {
+ if (app === "oci") {
     const ociResults = await ociUsers({ groups: selectedGroups });
-
     const ociCsvRows = [];
+    const unauthorizedEmails = [];
+    const missingEmails = [];
 
     for (const group of selectedGroups) {
-      const expected = await groupMembers(group.id);
-      const actual = ociResults[group.name]?.users || new Set();
+      const expectedMembers = await groupMembers(group.id);
+      const actualMembers = ociResults[group.name]?.users || new Set();
+      const { unauthorized, missing } = diffSets(expectedMembers, actualMembers);
 
-
-      const { unauthorized, missing } = diffSets(expected, actual);
-
-      unauthorized.forEach(email =>
-        ociCsvRows.push({
-          email,
-          status: "unauthorized",
-          group: group.name
-        })
-      );
-
-      missing.forEach(email =>
-        ociCsvRows.push({
-          email,
-          status: "missing",
-          group: group.name
-        })
-      );
-
-    }
-
-    if (ociCsvRows.length) {
-      await writeCSV({
-        app: "oci",
-        group: "oci", //  single file name
-        rows: ociCsvRows
+      unauthorized.forEach(email => {
+        ociCsvRows.push({ email, status: "unauthorized", group: group.name });
+        unauthorizedEmails.push(`${email} (${group.name})`);
+      });
+      missing.forEach(email => {
+        ociCsvRows.push({ email, status: "missing", group: group.name });
+        missingEmails.push(`${email} (${group.name})`);
       });
     }
 
-    /* ----- OCI UI EVIDENCE (GROUP-WISE) ----- */
-    const ociUiGroups = Object.entries(ociResults).map(
-      ([name, v]) => ({
-        name,
-        groupId: v.groupId
-      })
-    );
-
-    console.log(`[OCI] UI groups to capture: ${ociUiGroups.length}`);
-    ociUiGroups.forEach(g =>
-      console.log(`  → ${g.name} (${g.groupId})`)
-    );
-
-    if (!ociUiGroups.length) {
-      console.warn("[OCI] No valid OCI groups found for UI evidence — skipping UI capture");
-    } else {
-      await captureUserListEvidence(
-        "oci",
-        ociAdapter,
-        ociUiGroups
-      );
+    if (ociCsvRows.length) {
+      const csvPath = `./evidence/api/oci/oci.csv`; // Ensure writeCSV uses this path
+      await writeCSV({ app: "oci", group: "oci", rows: ociCsvRows });
+      evidenceFiles.push(csvPath);
     }
 
+    // CAPTURE RETURNED PATHS
+    const ociUiGroups = Object.entries(ociResults).map(([name, v]) => ({ name, groupId: v.groupId }));
+    const screenshotPaths = await captureUserListEvidence("oci", ociAdapter, ociUiGroups);
+    evidenceFiles.push(...screenshotPaths);
+
+    // Update Jira for OCI
+    await updateJiraTicket("OCI", unauthorizedEmails, missingEmails, evidenceFiles);
     continue;
   }
 
@@ -196,67 +171,61 @@ if (AUTO_MODE) {
      OTHER APPS (Slack / CrowdStrike)
   ============================ */
 
-  const expected = new Set();
-  for (const g of selectedGroups) {
-    const members = await groupMembers(g.id);
-    members.forEach(u => expected.add(u));
-  }
-// 🔒 Evidence-only applications (no API comparison)
+  /* ============================
+     OTHER APPS (Slack / CrowdStrike / etc.)
+   ============================ */
+const expected = new Set();
+for (const g of selectedGroups) {
+  const members = await groupMembers(g.id);
+  members.forEach(u => expected.add(u));
+}
+
+// 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  console.log(`\n[${app.toUpperCase()}] Evidence-only application`);
-  console.log("Skipping API comparison, capturing UI evidence only");
-
-  // Use the standard adapter routing
-  if (app === "caniphish") {
-    await captureUserListEvidence("caniphish", caniphishAdapter);
-  } else if (app === "csat") {
-    await captureUserListEvidence("csat", csatAdapter);
-  } else {
-    throw new Error(
-      `Evidence-only app '${app}' has no Playwright adapter defined`
-    );
-  }
-
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter };
+  const screenshots = await captureUserListEvidence(app, adapterMap[app]);
+  // Update Jira immediately for evidence-only apps
+  await updateJiraTicket(app, [], [], screenshots); 
   continue;
 }
 
 const actual = await FETCHERS[app]({ groups: selectedGroups });
+const { unauthorized, missing } = diffSets(expected, actual);
 
-  const { unauthorized, missing } = diffSets(expected, actual);
-
-  if (unauthorized.length) {
-    await writeCSV({
-      app,
-      group: "ALL",
-      type: "unauthorized",
-      rows: unauthorized.map(email => ({ email }))
-    });
-  }
-
-  if (missing.length) {
-    await writeCSV({
-      app,
-      group: "ALL",
-      type: "missing",
-      rows: missing.map(email => ({ email }))
-    });
-  }
-
-  if (app === "slack") {
-    await captureUserListEvidence("slack", slackAdapter);
-  }
-
-  if (app === "crowdstrike") {
-    await captureUserListEvidence("crowdstrike", crowdstrikeAdapter);
-  }
-  
-
-  if (app === "cloudflare") {
-  console.log("\n[CLOUDFLARE] Capturing UI evidence...");
-  await captureUserListEvidence("cloudflare", cloudflareAdapter);
+// 1. Write CSV and capture the path automatically
+if (unauthorized.length) {
+  const path = await writeCSV({
+    app,
+    group: "unauthorized", 
+    rows: unauthorized.map(email => ({ email }))
+  });
+  if (path) evidenceFiles.push(path);
 }
 
+if (missing.length) {
+  const path = await writeCSV({
+    app,
+    group: "missing",
+    rows: missing.map(email => ({ email }))
+  });
+  if (path) evidenceFiles.push(path);
+}
 
+// 2. Capture Screenshots and capture the paths automatically
+const adapters = {
+  slack: slackAdapter,
+  crowdstrike: crowdstrikeAdapter,
+  cloudflare: cloudflareAdapter
+};
+
+if (adapters[app]) {
+  const screenshots = await captureUserListEvidence(app, adapters[app]);
+  if (screenshots) evidenceFiles.push(...screenshots);
+}
+
+    const friendlyName = app.charAt(0).toUpperCase() + app.slice(1);
+    console.log(`[PROCESS] Initiating Jira update for ${friendlyName}...`);
+    await updateJiraTicket(friendlyName, unauthorized, missing, evidenceFiles);
 }
 
 console.log("\n✔ Access review completed");
