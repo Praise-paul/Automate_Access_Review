@@ -1,4 +1,10 @@
 export default {
+
+  jumpcloud: {
+    keywords: ["jumpcloud admin", "jc admin"],
+    evidenceOnly: true
+  },
+
   slack: {
     keywords: ["slack"]
   },

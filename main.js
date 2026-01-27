@@ -26,7 +26,7 @@ import { crowdstrikeAdapter } from "./playwright/crowdstrike.js";
 import { caniphishAdapter } from "./playwright/caniphish.js";
 import { csatAdapter } from "./playwright/csat.js";
 import { cloudflareAdapter } from "./playwright/cloudflare.js";
-
+import { jumpcloudAdapter } from './playwright/jumpcloud.js';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -203,7 +203,7 @@ for (const g of selectedGroups) {
 
 // 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter };
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
   const screenshots = await captureUserListEvidence(app, adapterMap[app]);
   // Update Jira immediately for evidence-only apps
   await updateJiraTicket(app, [], [], screenshots); 
@@ -242,7 +242,7 @@ if (missing.length) {
 const adapters = {
   slack: slackAdapter,
   crowdstrike: crowdstrikeAdapter,
-  cloudflare: cloudflareAdapter
+  cloudflare: cloudflareAdapter,
 };
 
 if (adapters[app]) {
