@@ -29,13 +29,14 @@ import { cloudflareAdapter } from "./playwright/cloudflare.js";
 import { jumpcloudAdapter } from './playwright/jumpcloud.js';
 import { githubAdapter } from './playwright/github.js';
 import { netskopeAdapter } from './playwright/netskope.js';
+import { openaiAdapter } from './playwright/openai.js';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
 });
 
 // Auto mode: if true, skips confirmation prompts
-const AUTO_MODE = true;
+const AUTO_MODE = false;
 
 if (!process.env.NODE_EXTRA_CA_CERTS) {
   throw new Error('Missing trusted CA configuration');
@@ -207,7 +208,7 @@ for (const g of selectedGroups) {
 
 // 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter, openai: openaiAdapter };
   const screenshots = await captureUserListEvidence(app, adapterMap[app]);
   // Update Jira immediately for evidence-only apps
   await updateJiraTicket(app, [], [], screenshots); 
