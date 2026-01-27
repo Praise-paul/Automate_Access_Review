@@ -6,3 +6,4 @@ playwright/profiles/
 .oci-profile/
 *.csv
 test.js
+rootcaCert.pem

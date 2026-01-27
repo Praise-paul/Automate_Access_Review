@@ -1,7 +1,8 @@
-import 'dotenv/config'; 
+import dotenv from 'dotenv';
 import './playwright/crowdstrike.js';
 import './playwright/slack.js';
-
+import https from 'https';
+dotenv.config({ override: true });
 
 import App from "./app.js";
 import { listGroups, groupMembers, getJumpCloudUserName } from "./jumpcloud.js";
@@ -26,9 +27,17 @@ import { caniphishAdapter } from "./playwright/caniphish.js";
 import { csatAdapter } from "./playwright/csat.js";
 import { cloudflareAdapter } from "./playwright/cloudflare.js";
 
+
+const agent = new https.Agent({
+  rejectUnauthorized: false
+});
+
 // Auto mode: if true, skips confirmation prompts
 const AUTO_MODE = true;
 
+if (!process.env.NODE_EXTRA_CA_CERTS) {
+  throw new Error('Missing trusted CA configuration');
+}
 
 /* ============================
    FETCHERS
@@ -141,14 +150,18 @@ if (AUTO_MODE) {
       const actualMembers = ociResults[group.name]?.users || new Set();
       const { unauthorized, missing } = diffSets(expectedMembers, actualMembers);
 
-      unauthorized.forEach(email => {
-        ociCsvRows.push({ email, status: "unauthorized", group: group.name });
-        unauthorizedEmails.push(`${email} (${group.name})`);
-      });
-      missing.forEach(email => {
-        ociCsvRows.push({ email, status: "missing", group: group.name });
-        missingEmails.push(`${email} (${group.name})`);
-      });
+      unauthorized.forEach(u => {
+  const email = typeof u === "string" ? u : u.email;
+  ociCsvRows.push({ email, status: "unauthorized", group: group.name });
+  unauthorizedEmails.push(`${email} (${group.name})`);
+});
+
+missing.forEach(u => {
+  const email = typeof u === "string" ? u : u.email;
+  ociCsvRows.push({ email, status: "missing", group: group.name });
+  missingEmails.push(`${email} (${group.name})`);
+});
+
     }
 
     if (ociCsvRows.length) {
@@ -205,7 +218,10 @@ if (unauthorized.length) {
   const path = await writeCSV({
     app,
     group: "unauthorized", 
-    rows: unauthorized.map(email => ({ email }))
+    rows: unauthorized.map(u => ({
+  email: typeof u === "string" ? u : u.email
+}))
+
   });
   if (path) evidenceFiles.push(path);
 }
@@ -214,7 +230,10 @@ if (missing.length) {
   const path = await writeCSV({
     app,
     group: "missing",
-    rows: missing.map(email => ({ email }))
+    rows: missing.map(u => ({
+  email: typeof u === "string" ? u : u.email
+}))
+
   });
   if (path) evidenceFiles.push(path);
 }
@@ -238,14 +257,13 @@ if (adapters[app]) {
     if (unauthorized.length > 0) {
   console.log(`[PROCESS] Creating individual requests for ${unauthorized.length} unauthorized users...`);
   
-  for (const email of unauthorized) {
-    // Search the list we created above for the name
-    const userName = await getJumpCloudUserName(email);
-    const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
-    
-    await createAccessTicket(userName, email, jcGroup);
+  for (const user of unauthorized) {
+   const { name, email } = await getJumpCloudUserName(user);
+  const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
+
+  await createAccessTicket(name, email, jcGroup);
   }
 }
 }
 
-console.log("\n✔ Access review completed");
+console.log("\n Access review completed");
