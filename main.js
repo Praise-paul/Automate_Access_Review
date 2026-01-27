@@ -12,7 +12,7 @@ import slackUsers from "./slack.js";
 import crowdstrikeUsers from "./crowdstrike.js";
 import ociUsers from "./oci.js";
 import cloudflareUsers from "./cloudflare.js";
-
+import githubUsers from './github.js';
 
 
 import writeCSV from "./report.js";
@@ -27,13 +27,14 @@ import { caniphishAdapter } from "./playwright/caniphish.js";
 import { csatAdapter } from "./playwright/csat.js";
 import { cloudflareAdapter } from "./playwright/cloudflare.js";
 import { jumpcloudAdapter } from './playwright/jumpcloud.js';
+import { githubAdapter } from './playwright/github.js';
 
 const agent = new https.Agent({
   rejectUnauthorized: false
 });
 
 // Auto mode: if true, skips confirmation prompts
-const AUTO_MODE = true;
+const AUTO_MODE = false;
 
 if (!process.env.NODE_EXTRA_CA_CERTS) {
   throw new Error('Missing trusted CA configuration');
@@ -48,6 +49,7 @@ const FETCHERS = {
   crowdstrike: crowdstrikeUsers,
   cloudflare: cloudflareUsers,
   oci: ociUsers,
+  github: githubUsers,
 };
 
 /* ============================
@@ -203,7 +205,7 @@ for (const g of selectedGroups) {
 
 // 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter, github: githubAdapter };
   const screenshots = await captureUserListEvidence(app, adapterMap[app]);
   // Update Jira immediately for evidence-only apps
   await updateJiraTicket(app, [], [], screenshots); 
@@ -243,6 +245,7 @@ const adapters = {
   slack: slackAdapter,
   crowdstrike: crowdstrikeAdapter,
   cloudflare: cloudflareAdapter,
+  github: githubAdapter,
 };
 
 if (adapters[app]) {

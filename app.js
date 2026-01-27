@@ -4,7 +4,9 @@ export default {
     keywords: ["jumpcloud admin", "jc admin"],
     evidenceOnly: true
   },
-
+github: {
+  keywords: ["github group offline"]
+},
   slack: {
     keywords: ["slack"]
   },
