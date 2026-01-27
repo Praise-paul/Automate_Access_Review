@@ -1,12 +1,14 @@
 export default {
-
+  netskope: {
+    keywords: ["netskope"],
+  },
   jumpcloud: {
     keywords: ["jumpcloud admin", "jc admin"],
     evidenceOnly: true
   },
-github: {
-  keywords: ["github group offline"]
-},
+  github: {
+    keywords: ["github group offline"]
+  },
   slack: {
     keywords: ["slack"]
   },
@@ -19,13 +21,13 @@ github: {
     evidenceOnly: true
   },
   csat: {
-  keywords: ["csat", "cis"],
-  evidenceOnly: true
-},
-cloudflare: {
-  keywords: ["cloudflare", "cf"]
-},
-oci: {
+    keywords: ["csat", "cis"],
+    evidenceOnly: true
+  },
+  cloudflare: {
+    keywords: ["cloudflare", "cf"]
+  },
+  oci: {
     autoGroupPrefix: "OracleOCI-"
   },
 };
