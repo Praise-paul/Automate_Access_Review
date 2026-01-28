@@ -121,7 +121,7 @@ await jira.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/comment`, commentBody,
                 await jira.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/attachments`, form, {
                     headers: { ...headers, ...form.getHeaders() }
                 });
-                console.log(`📎 Attached: ${path.basename(filePath)}`);
+                console.log(`Attached: ${path.basename(filePath)}`);
             }
         }
         console.log(` Successfully updated ${issueKey}`);
