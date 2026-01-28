@@ -1,13 +1,28 @@
+function correlateEmail(email) {
+    if (!email) return "";
+    return email
+        .toLowerCase()
+        .trim()
+        .replace("@finspace.ai", "@neospace.ai"); // Correlation logic
+}
 function normalize(input) {
   const map = new Map();
   if (!input) return map;
 
   const add = (item) => {
+    let rawEmail = "";
+    let originalValue = item;
     if (typeof item === "string") {
-      map.set(item, { email: item });
+      rawEmail = item;
+      originalValue = { email: item };
     } else if (item?.email) {
-      map.set(item.email, item);
+      rawEmail = item.email;
     }
+
+    if (rawEmail) {
+            const normalizedEmail = correlateEmail(rawEmail);
+            map.set(normalizedEmail, originalValue);
+        }
   };
 
   if (input instanceof Set || Array.isArray(input)) {

@@ -1,4 +1,22 @@
 export default {
+  exato: {
+    keywords: ["exato"],
+  },
+  censys: {
+    keywords: ["censys"],
+  },
+  framer: {
+    keywords: ["framer"],
+  },
+  adopt: {
+    keywords: ["adopt"],
+  },
+  grafana: {
+    keywords: ["grafana"],
+  },
+  openai: {
+    keywords: ["openai platform"]
+  },
   netskope: {
     keywords: ["netskope"],
   },

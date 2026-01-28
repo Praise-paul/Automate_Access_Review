@@ -14,6 +14,7 @@ import ociUsers from "./oci.js";
 import cloudflareUsers from "./cloudflare.js";
 import githubUsers from './github.js';
 import netskopeUsers from "./netskope.js";
+import openaiUsers from "./openai.js";
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
@@ -53,6 +54,7 @@ const FETCHERS = {
   oci: ociUsers,
   github: githubUsers,
   netskope: netskopeUsers,
+  openai: openaiUsers,
 };
 
 /* ============================
@@ -182,6 +184,10 @@ missing.forEach(u => {
 
     // Update Jira for OCI
     await updateJiraTicket("OCI", unauthorizedEmails, missingEmails, evidenceFiles);
+    continue;
+  }
+  if(app === "censys" || app === "exato" || app === "framer" || app === "adopt" || app === "grafana"){
+    await updateJiraTicket(app.charAt(0).toUpperCase() + app.slice(1), [], [], []);
     continue;
   }
 
