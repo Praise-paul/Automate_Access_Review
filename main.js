@@ -223,7 +223,7 @@ for (const g of selectedGroups) {
 
 // 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter, openai: openaiAdapter };
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter};
   const screenshots = await captureUserListEvidence(app, adapterMap[app]);
   // Update Jira immediately for evidence-only apps
   await updateJiraTicket(app, [], [], screenshots); 
@@ -265,6 +265,7 @@ const adapters = {
   cloudflare: cloudflareAdapter,
   github: githubAdapter,
   netskope: netskopeAdapter,
+  //openai: openaiAdapter
 };
 
 if (adapters[app]) {
