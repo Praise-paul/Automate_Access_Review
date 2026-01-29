@@ -157,7 +157,7 @@ export async function createAccessTicket(userName, userEmail, groupName) {
 
     try {
         const res = await jira.post(`${BASE_URL}/rest/servicedeskapi/request`, body, { headers });
-        console.log(`✨ Created Request: ${res.data.issueKey} for ${userName}`);
+        console.log(`Created Request: ${res.data.issueKey} for ${userName}`);
         return res.data.issueKey;
     } catch (err) {
         console.error(`Failed to create ticket for ${userEmail}:`, err.response?.data || err.message);

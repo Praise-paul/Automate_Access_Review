@@ -34,7 +34,7 @@ export const jumpcloudAdapter = {
         console.log("[JUMPCLOUD] Waiting for Dashboard load...");
         // Match the hash-route #/home
         await page.waitForURL(url => url.hash.includes('/home'), { timeout: 30000 });
-        console.log("✅ Login successful");
+        console.log("Login successful");
     },
 
     async gotoUsers(page) {

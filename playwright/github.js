@@ -60,7 +60,7 @@ export const githubAdapter = {
         await page.type('#app_totp', token, { delay: 100 });
 
         await page.waitForURL('https://github.com/', { timeout: 30000 });
-        console.log("✅ GitHub Login successful");
+        console.log("GitHub Login successful");
     },
 
     async gotoUsers(page) {
