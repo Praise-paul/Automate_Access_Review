@@ -1,7 +1,6 @@
 export default {
   snyk: {
     keywords: ["snyk"],
-    evidenceOnly: true
 },
   exato: {
     keywords: ["exato"],

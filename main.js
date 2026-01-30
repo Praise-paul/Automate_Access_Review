@@ -15,6 +15,7 @@ import cloudflareUsers from "./cloudflare.js";
 import githubUsers from './github.js';
 import netskopeUsers from "./netskope.js";
 import openaiUsers from "./openai.js";
+import snykUsers from './snyk.js';
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
@@ -56,6 +57,7 @@ const FETCHERS = {
   github: githubUsers,
   netskope: netskopeUsers,
   openai: openaiUsers,
+  snyk: snykUsers,
 };
 
 /* ============================
@@ -108,8 +110,8 @@ for (const app of Object.keys(App)) {
 let selectedGroups = [];
 
 if (AUTO_MODE) {
-  if (app === "oci") {
-    // OCI always uses all groups
+  if (app === "oci" || app === "snyk") {
+    // OCI and Snyk always use all groups
     selectedGroups = relevantGroups;
   } else {
     // Slack → index 1, all others → index 0
@@ -127,7 +129,7 @@ if (AUTO_MODE) {
 } else {
   // Interactive mode (current behavior)
   selectedGroups =
-    app === "oci"
+    app === "oci" || app === "snyk"
       ? relevantGroups
       : selectGroups(app, relevantGroups);
 }
@@ -224,7 +226,7 @@ for (const g of selectedGroups) {
 
 // 🔒 Evidence-only applications
 if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter, snyk: snykAdapter };
+  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
   const screenshots = await captureUserListEvidence(app, adapterMap[app]);
   // Update Jira immediately for evidence-only apps
   await updateJiraTicket(app, [], [], screenshots); 
@@ -266,6 +268,7 @@ const adapters = {
   cloudflare: cloudflareAdapter,
   github: githubAdapter,
   netskope: netskopeAdapter,
+  snyk: snykAdapter,
   //openai: openaiAdapter
 };
 
