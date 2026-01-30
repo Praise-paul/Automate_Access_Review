@@ -19,7 +19,7 @@ import snykUsers from './snyk.js';
 
 import writeCSV from "./report.js";
 import { diffSets } from "./diff.js";
-import { updateJiraTicket, createAccessTicket } from './jira.js';
+import { updateJiraTicket, createAccessTicket, getJiraTicketStatus } from './jira.js';
 
 import { captureUserListEvidence } from "./playwright/index.js";
 import { ociAdapter } from './playwright/oci.js';
@@ -72,68 +72,64 @@ console.log(`[INIT] Loaded ${ALL_JC_GROUPS.length} groups`);
    MAIN LOOP
 ============================ */
 
+/* ============================
+   MAIN LOOP
+============================ */
+
 for (const app of Object.keys(App)) {
   let evidenceFiles = [];
-  console.log(`\n=== ${app.toUpperCase()} ===`);
+  
+  // 1. DEFINE NAMES EARLY
+  // This ensures 'friendlyName' is available for the Jira check immediately
+  const friendlyName = app.charAt(0).toUpperCase() + app.slice(1);
+  console.log(`\n=== ${friendlyName.toUpperCase()} ===`);
 
-  if (!AUTO_MODE) {
-  if (!(await confirmApp(app))) {
-    console.log(`Skipping ${app.toUpperCase()}`);
+  /* 2. PRE-CHECK JIRA STATUS */
+  // This gates the entire app process (Prompts, Fetching, and Playwright)
+  const currentTicketStatus = await getJiraTicketStatus(friendlyName);
+  
+  if (currentTicketStatus === "IN PROGRESS" || currentTicketStatus === "CLOSED") {
+    console.log(`[SKIP] ${friendlyName} is already ${currentTicketStatus}. Skipping process.`);
     continue;
   }
-} else {
-  // AUTO MODE behavior
-  if (app === "csat") {
+
+  /* 3. CONFIRMATION / AUTO_MODE */
+  if (!AUTO_MODE) {
+    if (!(await confirmApp(app))) {
+      console.log(`Skipping ${app.toUpperCase()}`);
+      continue;
+    }
+  } else if (app === "csat") {
     console.log("Skipping CSAT (AUTO_MODE enabled)");
     continue;
   }
-}
 
   const cfg = App[app];
 
-
-  /* ----- FILTER GROUPS FOR THIS APP ----- */
-  const relevantGroups = filterGroupsForApp(
-    app,
-    ALL_JC_GROUPS,
-    App
-  );
-
+  /* 4. FILTER & SELECT GROUPS */
+  const relevantGroups = filterGroupsForApp(app, ALL_JC_GROUPS, App);
   if (!relevantGroups.length) {
     console.log("No relevant JumpCloud groups found, skipping.");
     continue;
   }
 
-  // ============================
-// GROUP SELECTION
-// ============================
-let selectedGroups = [];
-
-if (AUTO_MODE) {
-  if (app === "oci" || app === "snyk") {
-    // OCI and Snyk always use all groups
-    selectedGroups = relevantGroups;
-  } else {
-    // Slack → index 1, all others → index 0
-    const index = app === "slack" ? 1 : 0;
-
-    if (!relevantGroups[index]) {
-      console.warn(
-        `[AUTO_MODE] No group at index ${index} for ${app.toUpperCase()}, skipping`
-      );
-      continue;
+  let selectedGroups = [];
+  if (AUTO_MODE) {
+    if (app === "oci" || app === "snyk") {
+      selectedGroups = relevantGroups;
+    } else {
+      const index = app === "slack" ? 1 : 0;
+      if (!relevantGroups[index]) {
+        console.warn(`[AUTO_MODE] No group at index ${index} for ${app.toUpperCase()}, skipping`);
+        continue;
+      }
+      selectedGroups = [relevantGroups[index]];
     }
-
-    selectedGroups = [relevantGroups[index]];
-  }
-} else {
-  // Interactive mode (current behavior)
-  selectedGroups =
-    app === "oci" || app === "snyk"
-      ? relevantGroups
+  } else {
+    selectedGroups = (app === "oci" || app === "snyk") 
+      ? relevantGroups 
       : selectGroups(app, relevantGroups);
-}
-
+  }
 
   if (!selectedGroups.length) {
     console.log("No groups selected, skipping.");
@@ -141,15 +137,12 @@ if (AUTO_MODE) {
   }
 
   console.log("Selected groups:");
-  selectedGroups.forEach(g =>
-    console.log(` - ${g.name} (${g.id})`)
-  );
+  selectedGroups.forEach(g => console.log(` - ${g.name} (${g.id})`));
 
   /* ============================
-     OCI ACCESS REVIEW
-  ============================ */
-
- if (app === "oci") {
+     OCI ACCESS REVIEW (Special Case)
+  ============================ */
+  if (app === "oci") {
     const ociResults = await ociUsers({ groups: selectedGroups });
     const ociCsvRows = [];
     const unauthorizedEmails = [];
@@ -161,136 +154,95 @@ if (AUTO_MODE) {
       const { unauthorized, missing } = diffSets(expectedMembers, actualMembers);
 
       unauthorized.forEach(u => {
-  const email = typeof u === "string" ? u : u.email;
-  ociCsvRows.push({ email, status: "unauthorized", group: group.name });
-  unauthorizedEmails.push(`${email} (${group.name})`);
-});
+        const email = typeof u === "string" ? u : u.email;
+        ociCsvRows.push({ email, status: "unauthorized", group: group.name });
+        unauthorizedEmails.push(`${email} (${group.name})`);
+      });
 
-missing.forEach(u => {
-  const email = typeof u === "string" ? u : u.email;
-  ociCsvRows.push({ email, status: "missing", group: group.name });
-  missingEmails.push(`${email} (${group.name})`);
-});
-
+      missing.forEach(u => {
+        const email = typeof u === "string" ? u : u.email;
+        ociCsvRows.push({ email, status: "missing", group: group.name });
+        missingEmails.push(`${email} (${group.name})`);
+      });
     }
 
     if (ociCsvRows.length) {
-      const csvPath = `./evidence/api/oci/oci.csv`; // Ensure writeCSV uses this path
+      const csvPath = `./evidence/api/oci/oci.csv`;
       await writeCSV({ app: "oci", group: "oci", rows: ociCsvRows });
       evidenceFiles.push(csvPath);
     }
 
-    // CAPTURE RETURNED PATHS
     const ociUiGroups = Object.entries(ociResults).map(([name, v]) => ({ name, groupId: v.groupId }));
     const screenshotPaths = await captureUserListEvidence("oci", ociAdapter, ociUiGroups);
     evidenceFiles.push(...screenshotPaths);
 
-    // Update Jira for OCI
     await updateJiraTicket("OCI", unauthorizedEmails, missingEmails, evidenceFiles);
+    
     if (unauthorizedEmails.length > 0) {
-    for (const entry of unauthorizedEmails) {
+      for (const entry of unauthorizedEmails) {
         const emailOnly = entry.split(' ')[0]; 
-        
         const { name, email } = await getJumpCloudUserName(emailOnly);
         const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
         await createAccessTicket(name, email, jcGroup);
+      }
     }
-}
-    continue;
+    continue; // Move to next app in the loop
   }
-  if(app === "censys" || app === "exato" || app === "framer" || app === "adopt" || app === "grafana"){
-    await updateJiraTicket(app.charAt(0).toUpperCase() + app.slice(1), [], [], []);
+
+  // Handle simple evidence-only bypass apps
+  if (["censys", "exato", "framer", "adopt", "grafana"].includes(app)) {
+    await updateJiraTicket(friendlyName, [], [], []);
     continue;
   }
 
   /* ============================
-     OTHER APPS (Slack / CrowdStrike)
-  ============================ */
-
-  /* ============================
-     OTHER APPS (Slack / CrowdStrike / etc.)
-   ============================ */
-const allSelectedMembers = []; 
-const expectedEmails = new Set();
-
-for (const g of selectedGroups) {
-  const members = await groupMembers(g.id); // Now returns [{email, name}]
-  members.forEach(m => {
-    expectedEmails.add(m.email);
-    // Add to our lookup list if not already there
-    if (!allSelectedMembers.find(existing => existing.email === m.email)) {
-      allSelectedMembers.push(m);
-    }
-  });
-}
-
-// 🔒 Evidence-only applications
-if (cfg.evidenceOnly) {
-  const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
-  const screenshots = await captureUserListEvidence(app, adapterMap[app]);
-  // Update Jira immediately for evidence-only apps
-  await updateJiraTicket(app, [], [], screenshots); 
-  continue;
-}
-
-const actual = await FETCHERS[app]({ groups: selectedGroups });
-const { unauthorized, missing } = diffSets(expectedEmails, actual);
-
-// 1. Write CSV and capture the path automatically
-if (unauthorized.length) {
-  const path = await writeCSV({
-    app,
-    group: "unauthorized", 
-    rows: unauthorized.map(u => ({
-  email: typeof u === "string" ? u : u.email
-}))
-
-  });
-  if (path) evidenceFiles.push(path);
-}
-
-if (missing.length) {
-  const path = await writeCSV({
-    app,
-    group: "missing",
-    rows: missing.map(u => ({
-  email: typeof u === "string" ? u : u.email
-}))
-
-  });
-  if (path) evidenceFiles.push(path);
-}
-
-// 2. Capture Screenshots and capture the paths automatically
-const adapters = {
-  slack: slackAdapter,
-  crowdstrike: crowdstrikeAdapter,
-  cloudflare: cloudflareAdapter,
-  github: githubAdapter,
-  netskope: netskopeAdapter,
-  snyk: snykAdapter,
-  //openai: openaiAdapter
-};
-
-if (adapters[app]) {
-  const screenshots = await captureUserListEvidence(app, adapters[app]);
-  if (screenshots) evidenceFiles.push(...screenshots);
-}
-
-    const friendlyName = app.charAt(0).toUpperCase() + app.slice(1);
-    console.log(`[PROCESS] Initiating Jira update for ${friendlyName}...`);
-    await updateJiraTicket(friendlyName, unauthorized, missing, evidenceFiles);
-
-    if (unauthorized.length > 0) {
-  console.log(`[PROCESS] Creating individual requests for ${unauthorized.length} unauthorized users...`);
-  
-  for (const user of unauthorized) {
-   const { name, email } = await getJumpCloudUserName(user);
-  const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
-
-  await createAccessTicket(name, email, jcGroup);
+     OTHER APPS (Slack, Snyk, etc.)
+  ============================ */
+  const expectedEmails = new Set();
+  for (const g of selectedGroups) {
+    const members = await groupMembers(g.id);
+    members.forEach(m => expectedEmails.add(m.email));
   }
-}
+
+  if (cfg.evidenceOnly) {
+    const adapterMap = { caniphish: caniphishAdapter, csat: csatAdapter, jumpcloud: jumpcloudAdapter };
+    const screenshots = await captureUserListEvidence(app, adapterMap[app]);
+    await updateJiraTicket(friendlyName, [], [], screenshots); 
+    continue;
+  }
+
+  const actual = await FETCHERS[app]({ groups: selectedGroups });
+  const { unauthorized, missing } = diffSets(expectedEmails, actual);
+
+  // Write Reports
+  if (unauthorized.length) {
+    const path = await writeCSV({ app, group: "unauthorized", rows: unauthorized.map(u => ({ email: typeof u === "string" ? u : u.email })) });
+    if (path) evidenceFiles.push(path);
+  }
+
+  if (missing.length) {
+    const path = await writeCSV({ app, group: "missing", rows: missing.map(u => ({ email: typeof u === "string" ? u : u.email })) });
+    if (path) evidenceFiles.push(path);
+  }
+
+  // Capture Screenshots
+  const adapters = { slack: slackAdapter, crowdstrike: crowdstrikeAdapter, cloudflare: cloudflareAdapter, github: githubAdapter, netskope: netskopeAdapter, snyk: snykAdapter };
+  if (adapters[app]) {
+    const screenshots = await captureUserListEvidence(app, adapters[app]);
+    if (screenshots) evidenceFiles.push(...screenshots);
+  }
+
+  // Final Jira Update
+  console.log(`[PROCESS] Initiating Jira update for ${friendlyName}...`);
+  await updateJiraTicket(friendlyName, unauthorized, missing, evidenceFiles);
+
+  if (unauthorized.length > 0) {
+    for (const user of unauthorized) {
+      const { name, email } = await getJumpCloudUserName(user);
+      const jcGroup = selectedGroups[0]?.name || "Jumpcloud";
+      await createAccessTicket(name, email, jcGroup);
+    }
+  }
 }
 
 console.log("\n Access review completed");

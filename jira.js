@@ -39,8 +39,7 @@ const jira = axios.create({
 
 export async function updateJiraTicket(appName, unauthorized = [], missing = [], filePaths = []) {
     const headers = getAuthHeaders();
-    const normalizeList = list =>
-    list.map(u => (typeof u === "string" ? u : u.email));
+    const normalizeList = list => list.map(u => (typeof u === "string" ? u : u.email));
 
     try {
         const jql = `project = "TEST" AND summary ~ "Validar acessos na plataforma: ${appName}" ORDER BY created DESC`;
@@ -57,49 +56,39 @@ export async function updateJiraTicket(appName, unauthorized = [], missing = [],
         }
 
         const issueKey = search.data.issues[0].key;
-        console.log(` Found Ticket: ${issueKey}`);
+        const currentStatus = search.data.issues[0].fields.status.name.toUpperCase();
+        console.log(` Found Ticket: ${issueKey} (Current Status: ${currentStatus})`);
 
         let commentContent;
-
-if (unauthorized.length === 0 && missing.length === 0) {
-    // Content for a Perfect Match
-    commentContent = [
-        {
-            type: "paragraph",
-            content: [
-                { 
+const isPerfectMatch = unauthorized.length === 0 && missing.length === 0;
+        if (isPerfectMatch) {
+            commentContent = [{
+                type: "paragraph",
+                content: [{ 
                     type: "text", 
-                    text: `Access Review Completed: The access list for ${appName} matches perfectly with the JumpCloud User Group. No discrepancies found.`,
+                    text: `Access Review Completed: The access list for ${appName} matches perfectly. No discrepancies found.`,
                     marks: [{ type: "strong" }] 
+                }]
+            }];
+        } else {
+            commentContent = [
+                { type: "heading", attrs: { level: 3 }, content: [{ type: "text", text: `Access Review Result: ${appName}` }] },
+                {
+                    type: "paragraph",
+                    content: [
+                        { type: "text", text: "Unauthorized:", marks: [{ type: "strong" }] },
+                        { type: "text", text: unauthorized.length ? `\n• ${normalizeList(unauthorized).join('\n• ')}` : " None" }
+                    ]
+                },
+                {
+                    type: "paragraph",
+                    content: [
+                        { type: "text", text: "Missing:", marks: [{ type: "strong" }] },
+                        { type: "text", text: missing.length ? `\n• ${normalizeList(missing).join('\n• ')}` : " None" }
+                    ]
                 }
-            ]
+            ];
         }
-    ];
-} else {
-    // Your existing logic for reporting mismatches
-    commentContent = [
-        {
-            type: "heading", attrs: { level: 3 },
-            content: [{ type: "text", text: `Access Review Result: ${appName}` }]
-        },
-        {
-            type: "paragraph",
-            content: [
-                { type: "text", text: "Unauthorized:", marks: [{ type: "strong" }] },
-                { type: "text", text: unauthorized.length ? `\n• ${normalizeList(unauthorized).join('\n• ')}` : " None" }
-            ]
-        },
-        {
-            type: "paragraph",
-            content: [
-                { type: "text", text: "Missing:", marks: [{ type: "strong" }] },
-                { type: "text", text: missing.length ? `\n• ${normalizeList(missing).join('\n• ')}` : " None" }
-
-            ]
-        }
-    ];
-}
-
 const commentBody = {
     body: {
         type: "doc",
@@ -125,7 +114,29 @@ await jira.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/comment`, commentBody,
             }
         }
         console.log(` Successfully updated ${issueKey}`);
+if (isPerfectMatch) {
+            if (currentStatus === "CLOSED") {
+                console.log(` Issue ${issueKey} is already CLOSED. Skipping.`);
+            } else {
+                // If OPEN, move to IN PROGRESS first
+                if (currentStatus === "OPEN") {
+                    await transitionIssue(issueKey, "Approved");
+                }
+                // Now move to CLOSED
+                await transitionIssue(issueKey, "Completed");
+            }
+        } else {
+            // DISCREPANCIES FOUND
+            if (currentStatus === "CLOSED") {
+                // If it was CLOSED, re-open it because new issues were found
+                await transitionIssue(issueKey, "Has Issues");
+            } else if (currentStatus === "OPEN") {
+                // Flag it for review
+                await transitionIssue(issueKey, "Approved");
+            }
+        }
 
+        console.log(` Successfully finished processing ${issueKey}`);
     } catch (err) {
         console.error('Jira Update Failed:', err.response?.data || err.message);
     }
@@ -161,6 +172,60 @@ export async function createAccessTicket(userName, userEmail, groupName) {
         return res.data.issueKey;
     } catch (err) {
         console.error(`Failed to create ticket for ${userEmail}:`, err.response?.data || err.message);
+    }
+}
+
+async function transitionIssue(issueKey, transitionName) {
+    const headers = getAuthHeaders();
+    try {
+        // 1. Check current status to avoid redundant transitions
+        const issueRes = await jira.get(`${BASE_URL}/rest/api/3/issue/${issueKey}?fields=status`, { headers });
+        const currentStatus = issueRes.data.fields.status.name.toUpperCase();
+
+        // Safety check: Don't transition if already in the desired end-state
+        if (currentStatus === "CLOSED" && transitionName === "Completed") {
+            console.log(` Issue ${issueKey} is already CLOSED. Skipping.`);
+            return;
+        }
+
+        // 2. Get available transitions
+        const res = await jira.get(`${BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, { headers });
+        const transitions = res.data.transitions;
+
+        const target = transitions.find(t => t.name.toLowerCase() === transitionName.toLowerCase());
+
+        if (target) {
+            await jira.post(`${BASE_URL}/rest/api/3/issue/${issueKey}/transitions`, {
+                transition: { id: target.id }
+            }, { headers });
+            console.log(` Successfully moved ${issueKey} via "${transitionName}"`);
+        } else {
+            console.warn(` Transition "${transitionName}" not valid from current status (${currentStatus}).`);
+        }
+    } catch (err) {
+        console.error(` Transition failed for ${issueKey}:`, err.message);
+    }
+}
+
+export async function getJiraTicketStatus(appName) {
+    const headers = getAuthHeaders();
+    try {
+        const jql = `project = "TEST" AND summary ~ "Validar acessos na plataforma: ${appName}" ORDER BY created DESC`;
+        
+        const search = await jira.post(`${BASE_URL}/rest/api/3/search/jql`, {
+            jql,
+            maxResults: 1,
+            fields: ['status'],
+        }, { headers });
+
+        if (search.data.issues && search.data.issues.length > 0) {
+            const status = search.data.issues[0].fields.status.name.toUpperCase();
+            return status;
+        }
+        return null;
+    } catch (err) {
+        console.error(`[JIRA] Failed to fetch status for ${appName}:`, err.message);
+        return null;
     }
 }
 
